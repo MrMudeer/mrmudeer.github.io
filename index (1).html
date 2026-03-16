@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Yagoub's Mistake Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f6f2;
+    --surface: #ffffff;
+    --border: #e2e0d8;
+    --border-light: #eceae3;
+    --text: #1a1917;
+    --muted: #8a8880;
+    --math:   #2d5a8e; --bio:    #2e7d52; --chem:   #b5451b;
+    --phys:   #6b35a8; --acc:    #b58c1a; --cs:     #1a6b6b;
+    --math-bg:#eef3fa; --bio-bg: #edf7f1; --chem-bg:#fdf0ec;
+    --phys-bg:#f4eefb; --acc-bg: #fdf7e8; --cs-bg:  #eaf5f5;
+  }
+
+  [data-theme="dark"] {
+    --bg: #111110;
+    --surface: #1c1c1a;
+    --border: #2e2d2a;
+    --border-light: #252522;
+    --text: #e8e6e0;
+    --muted: #6a6860;
+    --math-bg:#0e1825; --bio-bg: #0d1f17; --chem-bg:#271208;
+    --phys-bg:#1a0f2e; --acc-bg: #251e08; --cs-bg:  #081a1a;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.6;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .site-wrapper { display: flex; min-height: 100vh; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 225px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    position: fixed; top: 0; left: 0; bottom: 0;
+    z-index: 100; padding: 2rem 0;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .sidebar-brand { padding: 0 1.5rem 1.5rem; border-bottom: 1px solid var(--border-light); margin-bottom: 1.5rem; }
+  .sidebar-brand .name { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--text); letter-spacing: -0.02em; display: block; line-height: 1.25; }
+  .sidebar-brand .subtitle { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 5px; font-family: 'DM Mono', monospace; }
+
+  .sidebar-section-label { font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0 1.5rem; margin-bottom: 0.5rem; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 1.5rem; font-size: 13.5px; color: var(--muted);
+    cursor: pointer; transition: all 0.15s; border-left: 2px solid transparent;
+    text-decoration: none; font-weight: 400;
+  }
+  .nav-item:hover { color: var(--text); background: var(--bg); }
+  .nav-item.active { color: var(--text); font-weight: 500; border-left-color: var(--text); background: var(--bg); }
+
+  .nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .nav-count { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); background: var(--bg); padding: 1px 6px; border-radius: 99px; }
+
+  .sidebar-footer { margin-top: auto; padding: 1.25rem 1.5rem; border-top: 1px solid var(--border-light); }
+  .sidebar-stats-label { font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.75rem; }
+  .sidebar-stat { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .sidebar-stat span:first-child { color: var(--muted); }
+  .sidebar-stat span:last-child { font-family: 'DM Mono', monospace; font-weight: 500; }
+
+  .theme-toggle { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-light); }
+  .theme-label { font-size: 12px; color: var(--muted); }
+  .toggle-pill { width: 36px; height: 20px; background: var(--border); border-radius: 99px; cursor: pointer; position: relative; transition: background 0.2s; border: none; flex-shrink: 0; }
+  .toggle-pill::after { content: ''; width: 14px; height: 14px; background: var(--surface); border-radius: 50%; position: absolute; top: 3px; left: 3px; transition: transform 0.2s, background 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  [data-theme="dark"] .toggle-pill { background: #5a5a56; }
+  [data-theme="dark"] .toggle-pill::after { transform: translateX(16px); }
+
+  /* MAIN */
+  .main { margin-left: 225px; flex: 1; padding: 2.5rem 3rem; max-width: 920px; }
+
+  .page { display: none; }
+  .page.active { display: block; animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* PAGE HEADER */
+  .page-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
+  .page-header-left { display: flex; align-items: flex-end; gap: 14px; }
+  .page-title-group {}
+  .page-eyebrow { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+  .page-title { font-family: 'DM Serif Display', serif; font-size: 30px; letter-spacing: -0.02em; line-height: 1.1; }
+  .page-header-actions { display: flex; gap: 8px; align-items: center; padding-bottom: 4px; flex-wrap: wrap; }
+
+  .back-btn {
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500;
+    color: var(--muted); background: none; border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; cursor: pointer; transition: all 0.15s;
+    white-space: nowrap; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;
+  }
+  .back-btn:hover { color: var(--text); border-color: var(--muted); background: var(--bg); }
+
+  .download-btn {
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500;
+    padding: 7px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    transition: all 0.15s; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .download-btn:hover { border-color: var(--muted); color: var(--text); }
+
+  /* STATS */
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2rem; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; transition: background 0.2s, border-color 0.2s; }
+  .stat-card .val { font-family: 'DM Serif Display', serif; font-size: 28px; letter-spacing: -0.02em; line-height: 1; }
+  .stat-card .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+
+  /* FORM */
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; transition: background 0.2s, border-color 0.2s; }
+  .form-card-title { font-size: 13px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 1.25rem; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .form-full { margin-bottom: 12px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+  .field input, .field select, .field textarea {
+    font-family: 'DM Sans', sans-serif; font-size: 13.5px; padding: 9px 11px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+    color: var(--text); transition: border-color 0.15s, background 0.2s; outline: none; width: 100%;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--text); background: var(--surface); }
+  .field textarea { resize: vertical; line-height: 1.6; }
+  .field select option { background: var(--surface); color: var(--text); }
+  .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+  .btn { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border); background: transparent; color: var(--muted); }
+  .btn:hover { background: var(--bg); color: var(--text); }
+  .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn-primary:hover { opacity: 0.85; color: var(--bg); }
+
+  /* FILTER */
+  .filter-bar { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center; }
+  .filter-tag { font-size: 12px; font-weight: 500; padding: 5px 13px; border-radius: 99px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .filter-tag:hover { border-color: var(--text); color: var(--text); }
+  .filter-tag.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .filter-count { margin-left: auto; font-size: 12px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+  /* ENTRIES */
+  .entry-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 10px; transition: border-color 0.15s, background 0.2s; }
+  .entry-card:hover { border-color: var(--muted); }
+  .entry-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+  .entry-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .entry-idx { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+  .tag { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 99px; }
+  .tag-easy   { background: #edf7f1; color: #2e7d52; }
+  .tag-medium { background: #fdf7e8; color: #b58c1a; }
+  .tag-hard   { background: #fdf0ec; color: #b5451b; }
+  .tag-topic  { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+  .tag-marks  { background: var(--bg); color: var(--muted); font-family: 'DM Mono', monospace; border: 1px solid var(--border); }
+  [data-theme="dark"] .tag-easy   { background: #0d1f17; color: #5ecb8a; }
+  [data-theme="dark"] .tag-medium { background: #251e08; color: #d4aa4a; }
+  [data-theme="dark"] .tag-hard   { background: #271208; color: #e07a54; }
+  .entry-date { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .entry-delete { background: none; border: none; font-size: 17px; color: var(--muted); cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.15s; }
+  .entry-delete:hover { color: #b5451b; }
+  .entry-section-label { font-size: 10px; font-weight: 500; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+  .entry-question { font-size: 14px; line-height: 1.65; color: var(--text); margin-bottom: 14px; }
+  .entry-solution { font-size: 14px; line-height: 1.65; color: var(--text); background: var(--bg); border-radius: 8px; padding: 10px 13px; border-left: 3px solid var(--border); }
+  .entry-notes { font-size: 13px; color: var(--muted); font-style: italic; margin-top: 10px; line-height: 1.5; }
+  .entry-footer { margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+  .entry-footer input[type=checkbox] { width: 14px; height: 14px; accent-color: #2e7d52; cursor: pointer; }
+  .entry-footer label { font-size: 12px; color: var(--muted); cursor: pointer; }
+
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--muted); font-size: 14px; border: 1px dashed var(--border); border-radius: 12px; }
+
+  /* OVERVIEW */
+  .overview-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 2rem; }
+  .subject-overview-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 14px; }
+  .subject-overview-card:hover { border-color: var(--muted); transform: translateY(-1px); }
+  .subject-dot { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .subject-overview-info { flex: 1; }
+  .subject-overview-name { font-weight: 500; font-size: 15px; margin-bottom: 2px; }
+  .subject-overview-board { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .subject-overview-count { font-family: 'DM Serif Display', serif; font-size: 26px; color: var(--muted); }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; padding: 1.5rem; }
+    .form-grid-3, .form-grid-2 { grid-template-columns: 1fr; }
+    .overview-grid { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="site-wrapper">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="name">Yagoub's<br>Mistake Log</span>
+      <span class="subtitle">IGCSE · CIE</span>
+    </div>
+
+    <div class="sidebar-section-label">Overview</div>
+    <a class="nav-item active" data-page="overview" onclick="showPage('overview',this)">
+      <span style="font-size:13px;">◎</span> All subjects
+    </a>
+
+    <div class="sidebar-section-label" style="margin-top:1.25rem;">Subjects</div>
+    <a class="nav-item" data-page="maths"      onclick="showPage('maths',this)">      <span class="nav-dot" style="background:var(--math);"></span> Mathematics      <span class="nav-count" id="count-maths">0</span></a>
+    <a class="nav-item" data-page="biology"    onclick="showPage('biology',this)">    <span class="nav-dot" style="background:var(--bio);"></span>  Biology          <span class="nav-count" id="count-biology">0</span></a>
+    <a class="nav-item" data-page="chemistry"  onclick="showPage('chemistry',this)">  <span class="nav-dot" style="background:var(--chem);"></span> Chemistry        <span class="nav-count" id="count-chemistry">0</span></a>
+    <a class="nav-item" data-page="physics"    onclick="showPage('physics',this)">    <span class="nav-dot" style="background:var(--phys);"></span> Physics          <span class="nav-count" id="count-physics">0</span></a>
+    <a class="nav-item" data-page="accounting" onclick="showPage('accounting',this)"> <span class="nav-dot" style="background:var(--acc);"></span>  Accounting       <span class="nav-count" id="count-accounting">0</span></a>
+    <a class="nav-item" data-page="cs"         onclick="showPage('cs',this)">         <span class="nav-dot" style="background:var(--cs);"></span>  Computer Science <span class="nav-count" id="count-cs">0</span></a>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-stats-label">Total progress</div>
+      <div class="sidebar-stat"><span>Mistakes logged</span><span id="global-total">0</span></div>
+      <div class="sidebar-stat"><span>Reviewed</span><span id="global-reviewed">0</span></div>
+      <div class="sidebar-stat"><span>Pending</span><span id="global-pending">0</span></div>
+      <div class="theme-toggle">
+        <span class="theme-label" id="theme-label">Light mode</span>
+        <button class="toggle-pill" onclick="toggleTheme()" aria-label="Toggle dark mode"></button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <div class="page active" id="page-overview">
+      <div class="page-header">
+        <div class="page-title-group">
+          <div class="page-eyebrow">IGCSE · Cambridge CIE</div>
+          <div class="page-title">Yagoub's Mistake Log</div>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="val" id="ov-total">0</div><div class="lbl">Total mistakes</div></div>
+        <div class="stat-card"><div class="val" id="ov-reviewed">0</div><div class="lbl">Reviewed</div></div>
+        <div class="stat-card"><div class="val" id="ov-pending">0</div><div class="lbl">Still to review</div></div>
+      </div>
+      <div class="overview-grid">
+        <div class="subject-overview-card" onclick="showPage('maths',document.querySelector('[data-page=maths]'))">
+          <div class="subject-dot" style="background:var(--math-bg);">➕</div>
+          <div class="subject-overview-info"><div class="subject-overview-name">Mathematics</div><div class="subject-overview-board">0580 · Core &amp; Extended</div></div>
+          <div class="subject-overview-count" id="ov-count-maths">0</div>
+        </div>
+        <div class="subject-overview-card" onclick="showPage('biology',document.querySelector('[data-page=biology]'))">
+          <div class="subject-dot" style="background:var(--bio-bg);">🌿</div>
+          <div class="subject-overview-info"><div class="subject-overview-name">Biology</div><div class="subject-overview-board">0610 · Core &amp; Extended</div></div>
+          <div class="subject-overview-count" id="ov-count-biology">0</div>
+        </div>
+        <div class="subject-overview-card" onclick="showPage('chemistry',document.querySelector('[data-page=chemistry]'))">
+          <div class="subject-dot" style="background:var(--chem-bg);">⚗️</div>
+          <div class="subject-overview-info"><div class="subject-overview-name">Chemistry</div><div class="subject-overview-board">0620 · Core &amp; Extended</div></div>
+          <div class="subject-overview-count" id="ov-count-chemistry">0</div>
+        </div>
+        <div class="subject-overview-card" onclick="showPage('physics',document.querySelector('[data-page=physics]'))">
+          <div class="subject-dot" style="background:var(--phys-bg);">⚡</div>
+          <div class="subject-overview-info"><div class="subject-overview-name">Physics</div><div class="subject-overview-board">0625 · Core &amp; Extended</div></div>
+          <div class="subject-overview-count" id="ov-count-physics">0</div>
+        </div>
+        <div class="subject-overview-card" onclick="showPage('accounting',document.querySelector('[data-page=accounting]'))">
+          <div class="subject-dot" style="background:var(--acc-bg);">📒</div>
+          <div class="subject-overview-info"><div class="subject-overview-name">Accounting</div><div class="subject-overview-board">0452</div></div>
+          <div class="subject-overview-count" id="ov-count-accounting">0</div>
+        </div>
+        <div class="subject-overview-card" onclick="showPage('cs',document.querySelector('[data-page=cs]'))">
+          <div class="subject-dot" style="background:var(--cs-bg);">💻</div>
+          <div class="subject-overview-info"><div class="subject-overview-name">Computer Science</div><div class="subject-overview-board">0478</div></div>
+          <div class="subject-overview-count" id="ov-count-cs">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="subject-pages"></div>
+  </main>
+</div>
+
+<script>
+const SUBJECTS = [
+  { id:'maths',      name:'Mathematics',      code:'0580' },
+  { id:'biology',    name:'Biology',           code:'0610' },
+  { id:'chemistry',  name:'Chemistry',         code:'0620' },
+  { id:'physics',    name:'Physics',           code:'0625' },
+  { id:'accounting', name:'Accounting',        code:'0452' },
+  { id:'cs',         name:'Computer Science',  code:'0478' },
+];
+
+const DIFF_LABEL = { easy:'Silly mistake', medium:'Concept gap', hard:"Didn't know it" };
+const DIFF_CLASS = { easy:'tag-easy', medium:'tag-medium', hard:'tag-hard' };
+
+let data = loadData();
+let filters = {};
+SUBJECTS.forEach(s => { if(!data[s.id]) data[s.id]=[]; filters[s.id]='all'; });
+
+function loadData() { try { return JSON.parse(localStorage.getItem('yagoub-igcse')||'{}'); } catch { return {}; } }
+function saveData() { localStorage.setItem('yagoub-igcse', JSON.stringify(data)); }
+
+// DARK MODE
+let isDark = localStorage.getItem('yagoub-theme') === 'dark';
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  const lbl = document.getElementById('theme-label');
+  if (lbl) lbl.textContent = isDark ? 'Dark mode' : 'Light mode';
+  localStorage.setItem('yagoub-theme', isDark ? 'dark' : 'light');
+}
+function toggleTheme() { isDark = !isDark; applyTheme(); }
+applyTheme();
+
+// BUILD PAGES
+function buildPages() {
+  document.getElementById('subject-pages').innerHTML = SUBJECTS.map(s => `
+    <div class="page" id="page-${s.id}">
+      <div class="page-header">
+        <div class="page-header-left">
+          <button class="back-btn" onclick="showPage('overview',document.querySelector('[data-page=overview]'))">← Back</button>
+          <div class="page-title-group">
+            <div class="page-eyebrow">CIE IGCSE · ${s.code}</div>
+            <div class="page-title">${s.name}</div>
+          </div>
+        </div>
+        <div class="page-header-actions">
+          <button class="download-btn" onclick="downloadTxt('${s.id}')">↓ Download .txt</button>
+          <button class="download-btn" onclick="downloadJson('${s.id}')">↓ Download .json</button>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="val" id="stat-total-${s.id}">0</div><div class="lbl">Mistakes</div></div>
+        <div class="stat-card"><div class="val" id="stat-reviewed-${s.id}">0</div><div class="lbl">Reviewed</div></div>
+        <div class="stat-card"><div class="val" id="stat-pending-${s.id}">0</div><div class="lbl">To review</div></div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">Log a mistake</div>
+        <div class="form-grid-3">
+          <div class="field"><label>Paper / Year</label><input type="text" id="f-paper-${s.id}" placeholder="e.g. 2023 P2" /></div>
+          <div class="field"><label>Question no.</label><input type="text" id="f-qnum-${s.id}" placeholder="e.g. Q4b" /></div>
+          <div class="field"><label>Topic</label><input type="text" id="f-topic-${s.id}" placeholder="e.g. Algebra" /></div>
+        </div>
+        <div class="form-grid-2">
+          <div class="field">
+            <label>Difficulty</label>
+            <select id="f-diff-${s.id}">
+              <option value="">— select —</option>
+              <option value="easy">Silly mistake</option>
+              <option value="medium">Concept gap</option>
+              <option value="hard">Didn't know it</option>
+            </select>
+          </div>
+          <div class="field"><label>Marks</label><input type="number" id="f-marks-${s.id}" placeholder="e.g. 3" min="1" max="20" /></div>
+        </div>
+        <div class="form-full"><div class="field"><label>Question</label><textarea id="f-q-${s.id}" rows="3" placeholder="Describe what the question was asking..."></textarea></div></div>
+        <div class="form-full"><div class="field"><label>Correct solution / what to remember</label><textarea id="f-sol-${s.id}" rows="4" placeholder="Write the correct method, key steps, or formula..."></textarea></div></div>
+        <div class="form-full"><div class="field"><label>Notes (optional)</label><textarea id="f-notes-${s.id}" rows="2" placeholder="Why did you get it wrong? What will you do differently?"></textarea></div></div>
+        <div class="form-actions">
+          <button class="btn" onclick="clearForm('${s.id}')">Clear</button>
+          <button class="btn btn-primary" onclick="addEntry('${s.id}')">Add to log</button>
+        </div>
+      </div>
+
+      <div class="filter-bar" id="filter-bar-${s.id}">
+        <button class="filter-tag active" onclick="setFilter('${s.id}','all',this)">All</button>
+        <button class="filter-tag" onclick="setFilter('${s.id}','easy',this)">Silly mistakes</button>
+        <button class="filter-tag" onclick="setFilter('${s.id}','medium',this)">Concept gaps</button>
+        <button class="filter-tag" onclick="setFilter('${s.id}','hard',this)">Didn't know</button>
+        <button class="filter-tag" onclick="setFilter('${s.id}','pending',this)">To review</button>
+        <span class="filter-count" id="filter-count-${s.id}"></span>
+      </div>
+
+      <div class="entry-list" id="list-${s.id}"></div>
+    </div>
+  `).join('');
+}
+
+// NAVIGATION
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if (el) el.classList.add('active');
+  window.scrollTo(0,0);
+  renderAll();
+}
+
+// ADD ENTRY
+function addEntry(sid) {
+  const q   = document.getElementById('f-q-'+sid).value.trim();
+  const sol = document.getElementById('f-sol-'+sid).value.trim();
+  if (!q || !sol) { alert('Please fill in the question and solution.'); return; }
+  data[sid].unshift({
+    id: Date.now(),
+    paper: document.getElementById('f-paper-'+sid).value.trim(),
+    qnum:  document.getElementById('f-qnum-'+sid).value.trim(),
+    topic: document.getElementById('f-topic-'+sid).value.trim(),
+    diff:  document.getElementById('f-diff-'+sid).value,
+    marks: document.getElementById('f-marks-'+sid).value,
+    q, sol,
+    notes: document.getElementById('f-notes-'+sid).value.trim(),
+    date:  new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}),
+    reviewed: false,
+  });
+  saveData(); clearForm(sid); renderSubject(sid); updateCounts();
+}
+
+function clearForm(sid) {
+  ['paper','qnum','topic','marks','q','sol','notes'].forEach(f => { const el=document.getElementById('f-'+f+'-'+sid); if(el) el.value=''; });
+  const d=document.getElementById('f-diff-'+sid); if(d) d.value='';
+}
+
+function deleteEntry(sid, id) {
+  if (!confirm('Delete this entry?')) return;
+  data[sid]=data[sid].filter(e=>e.id!==id);
+  saveData(); renderSubject(sid); updateCounts();
+}
+
+function toggleReviewed(sid, id) {
+  const e=data[sid].find(e=>e.id===id);
+  if(e){ e.reviewed=!e.reviewed; saveData(); renderSubject(sid); updateCounts(); }
+}
+
+function setFilter(sid, f, btn) {
+  filters[sid]=f;
+  document.querySelectorAll(`#filter-bar-${sid} .filter-tag`).forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSubject(sid);
+}
+
+// DOWNLOAD
+function downloadTxt(sid) {
+  const entries=data[sid]||[];
+  if(!entries.length){ alert('No mistakes logged yet for this subject.'); return; }
+  const subj=SUBJECTS.find(s=>s.id===sid);
+  const lines=[
+    `YAGOUB'S MISTAKE LOG — ${subj.name.toUpperCase()} (CIE IGCSE ${subj.code})`,
+    `Exported: ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}`,
+    `Total entries: ${entries.length}`,
+    `${'='.repeat(60)}`, ''
+  ];
+  entries.forEach((e,i) => {
+    lines.push(`MISTAKE #${i+1}`);
+    if(e.paper||e.qnum) lines.push(`Paper/Question: ${[e.paper,e.qnum].filter(Boolean).join(' · ')}`);
+    if(e.topic)  lines.push(`Topic: ${e.topic}`);
+    if(e.diff)   lines.push(`Difficulty: ${DIFF_LABEL[e.diff]}`);
+    if(e.marks)  lines.push(`Marks: ${e.marks}`);
+    lines.push(`Date: ${e.date}`, `Reviewed: ${e.reviewed?'Yes':'No'}`, '');
+    lines.push('QUESTION:', e.q, '');
+    lines.push('CORRECT SOLUTION:', e.sol);
+    if(e.notes) lines.push('', 'NOTES:', e.notes);
+    lines.push('', '-'.repeat(60), '');
+  });
+  triggerDownload(lines.join('\n'), `yagoub-${sid}-mistakes.txt`, 'text/plain');
+}
+
+function downloadJson(sid) {
+  const entries=data[sid]||[];
+  if(!entries.length){ alert('No mistakes logged yet for this subject.'); return; }
+  const subj=SUBJECTS.find(s=>s.id===sid);
+  const payload={
+    student:'Yagoub', subject:subj.name, syllabus_code:subj.code, board:'CIE IGCSE',
+    exported:new Date().toISOString(), total_entries:entries.length,
+    entries:entries.map((e,i)=>({
+      number:i+1, date:e.date,
+      paper:e.paper||null, question_number:e.qnum||null, topic:e.topic||null,
+      difficulty:e.diff?DIFF_LABEL[e.diff]:null, marks:e.marks?parseInt(e.marks):null,
+      question:e.q, correct_solution:e.sol, notes:e.notes||null, reviewed:e.reviewed
+    }))
+  };
+  triggerDownload(JSON.stringify(payload,null,2), `yagoub-${sid}-mistakes.json`, 'application/json');
+}
+
+function triggerDownload(content, filename, type) {
+  const blob=new Blob([content],{type});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// RENDER
+function renderSubject(sid) {
+  const entries=data[sid]||[];
+  const total=entries.length;
+  const reviewed=entries.filter(e=>e.reviewed).length;
+  const el=id=>document.getElementById(id);
+  if(el('stat-total-'+sid)) el('stat-total-'+sid).textContent=total;
+  if(el('stat-reviewed-'+sid)) el('stat-reviewed-'+sid).textContent=reviewed;
+  if(el('stat-pending-'+sid)) el('stat-pending-'+sid).textContent=total-reviewed;
+
+  let filtered=entries;
+  const f=filters[sid];
+  if(f==='pending') filtered=entries.filter(e=>!e.reviewed);
+  else if(f!=='all') filtered=entries.filter(e=>e.diff===f);
+
+  const fc=el('filter-count-'+sid);
+  if(fc) fc.textContent=filtered.length===total?total+' entries':filtered.length+' of '+total;
+
+  const list=el('list-'+sid);
+  if(!list) return;
+  if(!filtered.length) {
+    list.innerHTML=`<div class="empty">${!total?'No mistakes logged yet — add your first one above.':'No entries match this filter.'}</div>`;
+    return;
+  }
+
+  list.innerHTML=filtered.map(e => {
+    const idx=entries.indexOf(e)+1;
+    return `<div class="entry-card">
+      <div class="entry-top">
+        <div class="entry-meta">
+          <span class="entry-idx">#${idx}</span>
+          ${e.diff?`<span class="tag ${DIFF_CLASS[e.diff]}">${DIFF_LABEL[e.diff]}</span>`:''}
+          ${e.topic?`<span class="tag tag-topic">${e.topic}</span>`:''}
+          ${e.marks?`<span class="tag tag-marks">${e.marks}m</span>`:''}
+          ${e.paper?`<span class="entry-date">${e.paper}${e.qnum?' · '+e.qnum:''}</span>`:''}
+          <span class="entry-date">${e.date}</span>
+        </div>
+        <button class="entry-delete" onclick="deleteEntry('${sid}',${e.id})" title="Delete">×</button>
+      </div>
+      <div class="entry-section-label">Question</div>
+      <div class="entry-question">${e.q.replace(/\n/g,'<br>')}</div>
+      <div class="entry-section-label">Correct solution</div>
+      <div class="entry-solution">${e.sol.replace(/\n/g,'<br>')}</div>
+      ${e.notes?`<div class="entry-notes">${e.notes.replace(/\n/g,'<br>')}</div>`:''}
+      <div class="entry-footer">
+        <input type="checkbox" id="rev-${sid}-${e.id}" ${e.reviewed?'checked':''} onchange="toggleReviewed('${sid}',${e.id})" />
+        <label for="rev-${sid}-${e.id}">Mark as reviewed</label>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateCounts() {
+  let total=0, reviewed=0;
+  SUBJECTS.forEach(s => {
+    const entries=data[s.id]||[];
+    const n=entries.length, r=entries.filter(e=>e.reviewed).length;
+    total+=n; reviewed+=r;
+    const c=document.getElementById('count-'+s.id); if(c) c.textContent=n;
+    const ov=document.getElementById('ov-count-'+s.id); if(ov) ov.textContent=n;
+  });
+  ['global-total','ov-total'].forEach(id=>{ const e=document.getElementById(id); if(e) e.textContent=total; });
+  ['global-reviewed','ov-reviewed'].forEach(id=>{ const e=document.getElementById(id); if(e) e.textContent=reviewed; });
+  ['global-pending','ov-pending'].forEach(id=>{ const e=document.getElementById(id); if(e) e.textContent=total-reviewed; });
+}
+
+function renderAll() { SUBJECTS.forEach(s=>renderSubject(s.id)); updateCounts(); }
+
+buildPages();
+renderAll();
+</script>
+</body>
+</html>
