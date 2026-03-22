@@ -1577,6 +1577,23 @@ let _curSid=null,_aiParsed=[],_bulkParsed=[],_answerFiles=[],_manualMSFiles=[],_
 function openModal(id){document.getElementById(id).style.display='block';document.body.style.overflow='hidden';}
 function closeModal(id){document.getElementById(id).style.display='none';document.body.style.overflow='';}
 
+// Robustly extract a JSON array from Claude's response regardless of surrounding text
+function extractJSONArray(text){
+  if(!text)return[];
+  // Strip markdown fences
+  let s=text.replace(/```json|```/gi,'').trim();
+  // Find the first [ and last ] to extract just the array
+  const start=s.indexOf('[');
+  const end=s.lastIndexOf(']');
+  if(start===-1||end===-1||end<start)return[];
+  try{
+    return JSON.parse(s.slice(start,end+1));
+  }catch(e){
+    // Last resort: try the whole cleaned string
+    try{return JSON.parse(s);}catch(e2){return[];}
+  }
+}
+
 // ══════════════════════════════════════════
 // AI MARKING
 // ══════════════════════════════════════════
@@ -1767,7 +1784,7 @@ async function runMarking(){
     setMsg('Claude is marking your paper…');
     const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,messages:[{role:'user',content:parts}]},setMsg);
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
-    _aiParsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    _aiParsed=extractJSONArray(raw);
     if(!Array.isArray(_aiParsed)||!_aiParsed.length){
       document.getElementById('ai-loading').style.display='none';
       document.getElementById('ai-results').style.display='block';
@@ -1874,7 +1891,7 @@ difficulty: easy=silly, medium=concept gap, hard=didn't know.${removedNote}`});
   try{
     const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:2048,messages:[{role:'user',content:parts}]},(m)=>console.log(m));
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
-    _bulkParsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    _bulkParsed=extractJSONArray(raw);
     if(!Array.isArray(_bulkParsed)||!_bulkParsed.length){alert('Claude couldn\'t extract any mistakes from that content.');return;}
     const br=document.getElementById('bulk-results');br.style.display='block';
     document.getElementById('bulk-summary').textContent=`Found ${_bulkParsed.length} mistake${_bulkParsed.length!==1?'s':''}. Review then save.`;
@@ -2099,7 +2116,16 @@ async function runQuickMark(){
         ...fileParts
       ]}]
     },setMsg);
-    const detectedCode=(detectData.content.find(c=>c.type==='text')?.text||'').trim().toUpperCase();
+    const detectedCode=(()=>{
+      const txt=(detectData.content.find(c=>c.type==='text')?.text||'').trim();
+      // Try to extract a CIE code pattern from anywhere in the response
+      const m=txt.match(/\d{4}\s*[\/\-]\s*\d{1,2}\s*[\/\-]\s*[A-Z]\s*[\/\-]\s*[A-Z]\s*[\/\-]\s*\d{2,4}/i);
+      if(m)return m[0].replace(/\s/g,'').toUpperCase();
+      if(txt.toUpperCase()==='UNKNOWN'||!txt)return null;
+      // If the whole response is short and looks like a code, use it
+      if(txt.length<20&&!txt.includes(' '))return txt.toUpperCase();
+      return null;
+    })();
     const parsed=(detectedCode&&detectedCode!=='UNKNOWN')?parseCIE(detectedCode):null;
     let subj=null;
     if(parsed){subj=SUBJECTS.find(s=>s.code===parsed.syllabus);_quickSid=subj?subj.id:null;}
@@ -2145,7 +2171,7 @@ async function runQuickMark(){
     setMsg('Claude is marking your paper…');
     const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,messages:[{role:'user',content:parts}]},setMsg);
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
-    _quickParsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    _quickParsed=extractJSONArray(raw);
     _quickDetected={code:detectedCode,parsed,subj,msInfo};
 
     document.getElementById('quick-loading').style.display='none';
