@@ -806,11 +806,10 @@ function buildMSUrl(parsed){
   const slug=PP_SLUG[parsed.syllabus];if(!slug)return null;
   const sl=SESS_LETTER[parsed.sessKey];if(!sl)return null;
   const yy=String(parsed.year).slice(2);
-  // bestexamhelp.com format: {code}-{sess}{yy}-ms-{paper}.pdf
-  const fname=`${parsed.syllabus}-${sl}${yy}-ms-${parsed.paperNum}.pdf`;
+  // bestexamhelp.com format: {code}_{sess}{yy}_ms_{paper}.pdf
+  const fname=`${parsed.syllabus}_${sl}${yy}_ms_${parsed.paperNum}.pdf`;
   const url=`https://bestexamhelp.com/exam/cambridge-igcse/${slug}/${parsed.year}/${fname}`;
-  const pageUrl=`https://bestexamhelp.com/exam/cambridge-igcse/${slug}/${parsed.year}/${parsed.syllabus}-${sl}${yy}-ms-${parsed.paperNum}.php`;
-  return{url,fname,pageUrl};
+  return{url,fname};
 }
 
 function parsePaperCode(sid){
