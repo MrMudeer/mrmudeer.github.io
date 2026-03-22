@@ -281,6 +281,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <!-- ══════════════════ MAIN ══════════════════ -->
 <main class="main">
 
+<!-- RECONNECT BANNER — shown when Drive token has expired -->
+<div id="reconnect-banner" style="display:none;align-items:center;gap:12px;background:#fdf7e8;border:1px solid #e8c96a;border-radius:10px;padding:.85rem 1.25rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <span style="font-size:13px;flex:1;color:var(--text)">⚠ <strong>Google Drive disconnected</strong> — your session expired. Reconnect now to make sure your data saves.</span>
+  <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="gdriveAuth()">Reconnect Drive</button>
+  <button class="btn" style="font-size:12px;padding:6px 10px" onclick="document.getElementById('reconnect-banner').style.display='none'">✕</button>
+</div>
+
+<!-- SYNC STATUS BAR -->
+<div id="sync-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:1.5rem;font-size:11px;color:var(--muted)">
+  <span id="sync-top-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .3s"></span>
+  <span id="sync-top-txt">Not connected to Drive</span>
+  <button onclick="gdriveLoad()" style="margin-left:auto;font-family:'DM Sans',sans-serif;font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:none" id="sync-reload-btn">↓ Load from Drive</button>
+</div>
+
 <!-- ── DASHBOARD ── -->
 <div class="page active" id="page-overview">
   <div class="page-header">
@@ -350,21 +364,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="gdrive-panel">
     <div class="form-card-title">Google Drive sync</div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.7">
-      Connect Google Drive to save your data as a JSON file (<code style="font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px">yagoub-igcse-data.json</code>) in your Drive.
-      Your data will survive browser clears and work across devices.<br><br>
-      <strong>Setup steps:</strong><br>
-      1. Go to <a href="https://console.cloud.google.com" target="_blank" style="color:var(--text)">console.cloud.google.com</a> → Create a project → Enable the <strong>Google Drive API</strong><br>
-      2. Create an <strong>OAuth 2.0 Client ID</strong> (Web application type), add <code style="font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px">http://localhost</code> and your Google Cloud hosting URL as authorised origins<br>
-      3. Paste your Client ID below and save
+      Your data is saved as <code style="font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px">yagoub-igcse-data.json</code> in your Google Drive. It auto-saves every time you make a change, and loads automatically when you open the site.
     </p>
-    <div class="form-grid-2" style="margin-bottom:1rem">
-      <div class="field">
-        <label>Google OAuth Client ID</label>
-        <input type="text" id="gdrive-client-id" placeholder="xxxxxxxx.apps.googleusercontent.com" />
-      </div>
-    </div>
     <div class="gdrive-actions">
-      <button class="btn btn-primary" onclick="saveClientId()">Save Client ID</button>
       <button class="btn" id="gdrive-auth-btn" onclick="gdriveAuth()" style="display:none">Connect Google Drive</button>
       <button class="btn icon-btn success" id="gdrive-sync-btn" onclick="gdriveSave()" style="display:none">↑ Save to Drive</button>
       <button class="btn icon-btn" id="gdrive-load-btn" onclick="gdriveLoad()" style="display:none">↓ Load from Drive</button>
@@ -391,14 +393,209 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <button class="btn" onclick="dismissMigration()">Dismiss</button>
     </div>
   </div>
+
+  <div class="gdrive-panel">
+    <div class="form-card-title">Anthropic API key — AI marking &amp; bulk import</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.7">
+      Used for AI paper marking and parsing bulk imports. Get a key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--text)">console.anthropic.com</a>. Stored only in your browser — never sent anywhere except directly to Anthropic.
+    </p>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:.5rem">
+      <div class="field" style="flex:1;min-width:240px">
+        <label>API Key</label>
+        <input type="password" id="anthropic-key-input" placeholder="sk-ant-..." autocomplete="off"/>
+      </div>
+      <button class="btn btn-primary" style="margin-bottom:1px" onclick="saveAnthropicKey()">Save key</button>
+      <button class="btn" id="anthropic-clear-btn" style="margin-bottom:1px;display:none" onclick="clearAnthropicKey()">Clear</button>
+    </div>
+    <div id="anthropic-key-status" style="font-size:12px;color:var(--muted)"></div>
+  </div>
 </div>
 
 <!-- ── SUBJECT PAGES (PP + ML) INJECTED BY JS ── -->
 <div id="pp-subject-pages"></div>
 <div id="ml-subject-pages"></div>
 
-</main>
+<!-- ══════ AI MARKING MODAL ══════ -->
+<div id="ai-mark-modal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.45);padding:2rem;overflow-y:auto">
+  <div style="background:var(--surface);border-radius:16px;max-width:720px;margin:0 auto;padding:2rem;position:relative">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem">
+      <div>
+        <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">AI Paper Marking</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:24px;letter-spacing:-.02em" id="ai-mark-title">Mark a paper</div>
+      </div>
+      <button onclick="closeModal('ai-mark-modal')" style="background:none;border:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1;padding:0 4px">×</button>
+    </div>
+
+    <div id="ai-mark-step1">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.7">
+        Enter the paper code and upload your answers. Claude will automatically fetch the official mark scheme from <strong>pastpapers.co</strong> and mark your paper.
+      </p>
+
+      <!-- Paper code + MS fetch status -->
+      <div class="form-full">
+        <div class="field">
+          <label>Paper code</label>
+          <input type="text" id="ai-mark-code" placeholder="e.g. 0580/21/M/J/25" style="font-family:'DM Mono',monospace;font-size:14px" oninput="previewMSUrl()"/>
+        </div>
+        <div id="ai-mark-ms-preview" style="margin-top:8px;display:none">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--muted)">Mark scheme URL:</span>
+            <code id="ai-mark-ms-url" style="font-size:11px;background:var(--bg);padding:2px 7px;border-radius:4px;border:1px solid var(--border);color:var(--text)"></code>
+            <a id="ai-mark-ms-link" href="#" target="_blank" style="font-size:11px;color:var(--text)">↗ preview</a>
+          </div>
+          <div id="ai-mark-ms-status" style="font-size:12px;color:var(--muted);margin-top:4px"></div>
+        </div>
+      </div>
+
+      <!-- Answers upload -->
+      <div class="form-full" style="margin-top:14px">
+        <div class="field">
+          <label>Your answers (photos or PDF)</label>
+          <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:100px;border:1px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);transition:border-color .15s;padding:1rem" id="answers-drop-zone">
+            <span style="font-size:28px">📄</span>
+            <span style="font-size:12px;color:var(--muted);text-align:center">Click to upload or drag &amp; drop<br>JPG, PNG, or PDF</span>
+            <input type="file" id="ai-mark-answers" multiple accept="image/*,.pdf" style="display:none" onchange="handleAnswerFiles(event)"/>
+          </label>
+          <div id="ai-mark-answers-list" style="margin-top:6px;font-size:12px;color:var(--muted)"></div>
+        </div>
+      </div>
+
+      <!-- Fallback: manual MS upload -->
+      <details style="margin-top:14px">
+        <summary style="font-size:12px;color:var(--muted);cursor:pointer;user-select:none">Can't auto-fetch the mark scheme? Upload it manually instead</summary>
+        <div class="form-full" style="margin-top:10px">
+          <div class="field">
+            <label>Mark scheme (PDF or images)</label>
+            <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:80px;border:1px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);padding:1rem">
+              <span style="font-size:22px">📋</span>
+              <span style="font-size:12px;color:var(--muted);text-align:center">Upload mark scheme manually</span>
+              <input type="file" id="ai-mark-ms" multiple accept="image/*,.pdf" style="display:none" onchange="handleMSFiles(event)"/>
+            </label>
+            <div id="ai-mark-ms-list" style="margin-top:6px;font-size:12px;color:var(--muted)"></div>
+          </div>
+        </div>
+      </details>
+
+      <div class="form-full" style="margin-top:14px">
+        <div class="field">
+          <label>Additional context (optional)</label>
+          <textarea id="ai-mark-context" rows="2" placeholder="e.g. I ran out of time on Q5, attempted Q3b but wasn't sure..."></textarea>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:1rem">
+        <button class="btn" onclick="closeModal('ai-mark-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="runAIMarking()">✦ Mark with Claude</button>
+      </div>
+    </div>
+
+    <!-- Results step -->
+    <div id="ai-mark-step2" style="display:none">
+      <div id="ai-mark-loading" style="text-align:center;padding:2rem 0">
+        <div style="font-size:32px;margin-bottom:1rem">✦</div>
+        <div style="font-size:14px;color:var(--muted)" id="ai-mark-loading-txt">Sending to Claude…</div>
+      </div>
+      <div id="ai-mark-results" style="display:none">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:1rem" id="ai-mark-summary"></div>
+        <div id="ai-mark-questions-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.5rem"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted)">Review the mistakes above, then save them to your log.</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="closeModal('ai-mark-modal')">Discard</button>
+            <button class="btn btn-primary" id="ai-mark-save-btn" onclick="saveAIMarkingResults()">Save to log</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+
+<!-- ══════ BULK IMPORT MODAL ══════ -->
+<div id="bulk-import-modal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.45);padding:2rem;overflow-y:auto">
+  <div style="background:var(--surface);border-radius:16px;max-width:720px;margin:0 auto;padding:2rem;position:relative">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem">
+      <div>
+        <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Bulk Import</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:24px;letter-spacing:-.02em" id="bulk-import-title">Import mistakes</div>
+      </div>
+      <button onclick="closeModal('bulk-import-modal')" style="background:none;border:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1;padding:0 4px">×</button>
+    </div>
+
+    <!-- Tab bar -->
+    <div style="display:flex;gap:6px;margin-bottom:1.5rem;border-bottom:1px solid var(--border);padding-bottom:0">
+      <button class="bulk-tab active" id="bulk-tab-text" onclick="switchBulkTab('text')" style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:7px 14px;border:none;background:none;cursor:pointer;color:var(--text);border-bottom:2px solid var(--text);margin-bottom:-1px">Paste text</button>
+      <button class="bulk-tab" id="bulk-tab-image" onclick="switchBulkTab('image')" style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:7px 14px;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px">Upload photo</button>
+      <button class="bulk-tab" id="bulk-tab-json" onclick="switchBulkTab('json')" style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:7px 14px;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px">Import JSON</button>
+    </div>
+
+    <!-- Paste text tab -->
+    <div id="bulk-tab-content-text">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">Write or paste your mistakes in plain English — one per paragraph or as a list. Claude will extract and structure them automatically.</p>
+      <div class="form-full">
+        <div class="field"><label>Paper code (optional)</label>
+          <input type="text" id="bulk-code-text" placeholder="e.g. 0580/21/M/J/25" style="font-family:'DM Mono',monospace;font-size:14px"/>
+        </div>
+      </div>
+      <div class="form-full" style="margin-top:10px">
+        <div class="field"><label>Your mistakes</label>
+          <textarea id="bulk-text-input" rows="8" placeholder="e.g.
+Q4b — forgot to divide by 2 when finding the midpoint. Answer should have been (3, 5) not (6, 10).
+Q7 — didn't know the formula for arc length. It's rθ where θ is in radians.
+Q11 — silly mistake, read the wrong column in the table."></textarea>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:1rem">
+        <button class="btn" onclick="closeModal('bulk-import-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="runBulkImport('text')">✦ Parse with Claude</button>
+      </div>
+    </div>
+
+    <!-- Upload photo tab -->
+    <div id="bulk-tab-content-image" style="display:none">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">Take a photo of your handwritten mistake notes or a marked paper and Claude will read and log them.</p>
+      <div class="form-full">
+        <div class="field"><label>Paper code (optional)</label>
+          <input type="text" id="bulk-code-image" placeholder="e.g. 0580/21/M/J/25" style="font-family:'DM Mono',monospace;font-size:14px"/>
+        </div>
+      </div>
+      <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:120px;border:1px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);padding:1rem;margin-top:10px" id="bulk-image-drop">
+        <span style="font-size:28px">📷</span>
+        <span style="font-size:12px;color:var(--muted);text-align:center">Click to upload photo(s) of your notes<br>JPG or PNG</span>
+        <input type="file" id="bulk-image-input" multiple accept="image/*" style="display:none" onchange="handleBulkImages(event)"/>
+      </label>
+      <div id="bulk-image-list" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:1rem">
+        <button class="btn" onclick="closeModal('bulk-import-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="runBulkImport('image')">✦ Parse with Claude</button>
+      </div>
+    </div>
+
+    <!-- JSON tab -->
+    <div id="bulk-tab-content-json" style="display:none">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">Import a <code style="font-size:11px;background:var(--bg);padding:1px 4px;border-radius:4px">.json</code> export from this site. All sessions and questions will be merged into this subject.</p>
+      <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:100px;border:1px dashed var(--border);border-radius:10px;cursor:pointer;background:var(--bg);padding:1rem" id="bulk-json-drop">
+        <span style="font-size:28px">📂</span>
+        <span style="font-size:12px;color:var(--muted);text-align:center">Click to upload a .json export</span>
+        <input type="file" id="bulk-json-input" accept=".json" style="display:none" onchange="handleBulkJSON(event)"/>
+      </label>
+      <div id="bulk-json-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+    </div>
+
+    <!-- Shared results area -->
+    <div id="bulk-results" style="display:none;margin-top:1.5rem;border-top:1px solid var(--border-light);padding-top:1.5rem">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:1rem" id="bulk-summary"></div>
+      <div id="bulk-questions-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.5rem"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--muted)">Review above, then save to your log.</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="clearBulkResults()">Clear</button>
+          <button class="btn btn-primary" id="bulk-save-btn" onclick="saveBulkResults()">Save to log</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -464,10 +661,57 @@ function loadLocal(){
   });
 }
 
+let _autoSaveTimer=null;
+let _isSyncing=false;
+
 function saveLocal(){
   localStorage.setItem('yagoub-hub',JSON.stringify({mistakes:mistakeData,pp:ppData,ppSettings}));
   updateSidebar();
   updateDashboard();
+  // debounced auto-save to Drive — waits 2s after last change then saves
+  if(gdriveToken){
+    setSyncStatus('pending');
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer=setTimeout(()=>autoSaveToDrive(),2000);
+  }
+}
+
+async function autoSaveToDrive(){
+  if(!gdriveToken||_isSyncing)return;
+  _isSyncing=true;
+  setSyncStatus('saving');
+  try{
+    const content=JSON.stringify({version:3,saved:new Date().toISOString(),mistakes:mistakeData,pp:ppData,ppSettings},null,2);
+    const blob=new Blob([content],{type:'application/json'});
+    if(!gdriveFileId)gdriveFileId=await findOrCreateFile();
+    const res=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`,{method:'PATCH',headers:{'Authorization':'Bearer '+gdriveToken,'Content-Type':'application/json'},body:blob});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    setSyncStatus('saved');
+    setGDriveMsg('✓ Auto-saved — '+new Date().toLocaleTimeString());
+  }catch(e){
+    setSyncStatus('error');
+    setGDriveMsg('Auto-save failed: '+e.message+' — click "Save to Drive" to retry');
+  }finally{_isSyncing=false;}
+}
+
+function setSyncStatus(state){
+  // state: 'pending' | 'saving' | 'saved' | 'error' | 'idle'
+  const dot=document.getElementById('gdrive-sidebar-dot');
+  const txt=document.getElementById('gdrive-sidebar-status');
+  const topDot=document.getElementById('sync-top-dot');
+  const topTxt=document.getElementById('sync-top-txt');
+  const map={
+    idle:  {color:'var(--border)',  label:'Not connected'},
+    pending:{color:'#b58c1a',      label:'Unsaved changes…'},
+    saving: {color:'#b58c1a',      label:'Saving…'},
+    saved:  {color:'#2e7d52',      label:'Saved to Drive'},
+    error:  {color:'#b5451b',      label:'Save failed'},
+  };
+  const s=map[state]||map.idle;
+  if(dot)dot.style.background=s.color;
+  if(txt)txt.textContent=s.label;
+  if(topDot)topDot.style.background=s.color;
+  if(topTxt)topTxt.textContent=s.label;
 }
 
 // ═══════════════════════════════════════════════════
@@ -776,7 +1020,9 @@ function buildMLSubjectPages(){
           </div>
         </div>
         <div class="page-header-actions">
-          <button class="icon-btn" onclick="copyAIPrompt('${s.id}')" id="ai-btn-${s.id}" title="Copies a ready-made prompt with all your mistakes to paste into Claude">✦ Copy AI prompt</button>
+          <button class="icon-btn" onclick="openBulkImport('${s.id}')" title="Import mistakes from text, photo, or JSON">↑ Bulk import</button>
+          <button class="icon-btn primary" onclick="openAIMarking('${s.id}')" title="Upload your paper and mark scheme — Claude marks it and logs mistakes">✦ AI mark</button>
+          <button class="icon-btn" onclick="copyAIPrompt('${s.id}')" id="ai-btn-${s.id}" title="Copies a ready-made prompt with all your mistakes to paste into Claude">⬡ Copy prompt</button>
           <button class="icon-btn" onclick="downloadTxt('${s.id}')">↓ .txt</button>
           <button class="icon-btn" onclick="downloadJson('${s.id}')">↓ .json</button>
         </div>
@@ -1257,7 +1503,32 @@ const GDRIVE_FILENAME='yagoub-igcse-data.json';
 const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 let gdriveToken=null;
 let gdriveFileId=null;
-let gdriveClientId=localStorage.getItem('yagoub-gdrive-client-id')||'';
+let gdriveClientId='50147606084-dieh1ro75lnt5mo98ijebm7euj29iqef.apps.googleusercontent.com';
+localStorage.setItem('yagoub-gdrive-client-id',gdriveClientId);
+
+// On startup: check if token is stored and still valid
+function initGDriveToken(){
+  const stored=JSON.parse(localStorage.getItem('yagoub-gdrive-token')||'null');
+  if(stored && stored.token && stored.expiry && Date.now() < stored.expiry){
+    gdriveToken=stored.token;
+    gdriveFileId=stored.fileId||null;
+  } else {
+    // Token expired or missing — wipe it
+    localStorage.removeItem('yagoub-gdrive-token');
+    gdriveToken=null;
+  }
+}
+
+function storeGDriveToken(token, expiresIn){
+  const expiry=Date.now()+(parseInt(expiresIn||3600)-120)*1000; // subtract 2min buffer
+  localStorage.setItem('yagoub-gdrive-token',JSON.stringify({token,expiry,fileId:gdriveFileId}));
+}
+
+function clearGDriveToken(){
+  localStorage.removeItem('yagoub-gdrive-token');
+  gdriveToken=null;
+  gdriveFileId=null;
+}
 
 function saveClientId(){
   const val=document.getElementById('gdrive-client-id').value.trim();
@@ -1268,6 +1539,8 @@ function saveClientId(){
 
 function gdriveAuth(){
   if(!gdriveClientId){alert('Save your Client ID first.');return;}
+  // Store current page so we can show reconnect banner on return
+  localStorage.setItem('yagoub-gdrive-reconnecting','1');
   const params=new URLSearchParams({client_id:gdriveClientId,redirect_uri:location.origin+location.pathname,response_type:'token',scope:GDRIVE_SCOPE,include_granted_scopes:'true'});
   location.href='https://accounts.google.com/o/oauth2/v2/auth?'+params.toString();
 }
@@ -1275,57 +1548,88 @@ function gdriveAuth(){
 function handleGDriveCallback(){
   const hash=new URLSearchParams(location.hash.replace('#',''));
   const token=hash.get('access_token');
-  if(token){gdriveToken=token;history.replaceState(null,'',location.pathname);updateGDriveUI();setGDriveMsg('Connected! You can now save and load data from Drive.');updateSidebar();}
+  const expiresIn=hash.get('expires_in');
+  if(token){
+    gdriveToken=token;
+    storeGDriveToken(token, expiresIn);
+    history.replaceState(null,'',location.pathname);
+    localStorage.removeItem('yagoub-gdrive-reconnecting');
+    updateGDriveUI();
+    updateSidebar();
+    setGDriveMsg('Connected! Loading your data from Drive…');
+    setSyncStatus('saving');
+    gdriveLoad(true);
+  }
 }
 
 async function gdriveSave(){
   if(!gdriveToken){alert('Connect Google Drive first.');return;}
-  setGDriveMsg('Saving…');
-  try{
-    const content=JSON.stringify({version:3,saved:new Date().toISOString(),mistakes:mistakeData,pp:ppData,ppSettings},null,2);
-    const blob=new Blob([content],{type:'application/json'});
-    if(!gdriveFileId)gdriveFileId=await findOrCreateFile();
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`,{method:'PATCH',headers:{'Authorization':'Bearer '+gdriveToken,'Content-Type':'application/json'},body:blob});
-    setGDriveMsg('✓ Saved to Google Drive — '+new Date().toLocaleTimeString());
-  }catch(e){setGDriveMsg('Error saving: '+e.message);}
+  await autoSaveToDrive();
 }
 
-async function gdriveLoad(){
+async function gdriveLoad(silent=false){
   if(!gdriveToken){alert('Connect Google Drive first.');return;}
-  setGDriveMsg('Loading…');
+  if(!silent)setGDriveMsg('Loading…');
+  setSyncStatus('saving');
   try{
     if(!gdriveFileId)gdriveFileId=await findOrCreateFile();
     const res=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{Authorization:'Bearer '+gdriveToken}});
-    if(!res.ok){setGDriveMsg('No data found in Drive yet — save first.');return;}
+    if(!res.ok){
+      setGDriveMsg(silent?'No Drive data yet — your local data is active.':'No data found in Drive yet — save first.');
+      setSyncStatus('saved');
+      return;
+    }
     const d=await res.json();
     if(d.mistakes){mistakeData=d.mistakes;SUBJECTS.forEach(s=>{if(!mistakeData[s.id])mistakeData[s.id]=[];});}
     if(d.pp){ppData=d.pp;SUBJECTS.forEach(s=>{if(!ppData[s.id])ppData[s.id]={};});}
-    saveLocal();renderAll();setGDriveMsg('✓ Loaded from Google Drive.');
-  }catch(e){setGDriveMsg('Error loading: '+e.message);}
+    if(d.ppSettings){ppSettings=d.ppSettings;SUBJECTS.forEach(s=>{if(!ppSettings[s.id])ppSettings[s.id]=JSON.parse(JSON.stringify(SUBJECT_DEFAULTS[s.id]));});}
+    localStorage.setItem('yagoub-hub',JSON.stringify({mistakes:mistakeData,pp:ppData,ppSettings}));
+    renderAll();
+    setSyncStatus('saved');
+    setGDriveMsg('✓ Loaded from Google Drive — '+new Date().toLocaleTimeString());
+    if(silent)showToast('Data loaded from Google Drive');
+  }catch(e){
+    setSyncStatus('error');
+    setGDriveMsg('Error loading: '+e.message);
+  }
 }
 
 async function findOrCreateFile(){
   const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_FILENAME}'+and+trashed=false&fields=files(id,name)`,{headers:{Authorization:'Bearer '+gdriveToken}});
   const res=await search.json();
-  if(res.files&&res.files.length>0)return res.files[0].id;
-  const meta=JSON.stringify({name:GDRIVE_FILENAME,mimeType:'application/json'});
-  const create=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},body:meta});
-  const file=await create.json();return file.id;
+  let fid;
+  if(res.files&&res.files.length>0){fid=res.files[0].id;}
+  else{
+    const meta=JSON.stringify({name:GDRIVE_FILENAME,mimeType:'application/json'});
+    const create=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},body:meta});
+    const file=await create.json();fid=file.id;
+  }
+  // cache fileId in token storage so we skip this search after a restart
+  const stored=JSON.parse(localStorage.getItem('yagoub-gdrive-token')||'null');
+  if(stored){stored.fileId=fid;localStorage.setItem('yagoub-gdrive-token',JSON.stringify(stored));}
+  return fid;
 }
 
-function gdriveDisconnect(){gdriveToken=null;gdriveFileId=null;updateGDriveUI();updateSidebar();setGDriveMsg('Disconnected.');}
+function gdriveDisconnect(){clearGDriveToken();updateGDriveUI();updateSidebar();setSyncStatus('idle');setGDriveMsg('Disconnected.');}
 
 function updateGDriveUI(){
-  const cid=document.getElementById('gdrive-client-id');if(cid&&gdriveClientId)cid.value=gdriveClientId;
   const authBtn=document.getElementById('gdrive-auth-btn');
   const syncBtn=document.getElementById('gdrive-sync-btn');
   const loadBtn=document.getElementById('gdrive-load-btn');
   const discBtn=document.getElementById('gdrive-disconnect-btn');
-  if(!gdriveClientId){if(authBtn)authBtn.style.display='none';if(syncBtn)syncBtn.style.display='none';if(loadBtn)loadBtn.style.display='none';if(discBtn)discBtn.style.display='none';return;}
+  const reloadBtn=document.getElementById('sync-reload-btn');
+  if(!gdriveClientId){
+    if(authBtn)authBtn.style.display='none';if(syncBtn)syncBtn.style.display='none';
+    if(loadBtn)loadBtn.style.display='none';if(discBtn)discBtn.style.display='none';
+    if(reloadBtn)reloadBtn.style.display='none';
+    setSyncStatus('idle');return;
+  }
   if(authBtn)authBtn.style.display=gdriveToken?'none':'inline-flex';
   if(syncBtn)syncBtn.style.display=gdriveToken?'inline-flex':'none';
   if(loadBtn)loadBtn.style.display=gdriveToken?'inline-flex':'none';
   if(discBtn)discBtn.style.display=gdriveToken?'inline-flex':'none';
+  if(reloadBtn)reloadBtn.style.display=gdriveToken?'inline-flex':'none';
+  if(!gdriveToken)setSyncStatus('idle');
 }
 function setGDriveMsg(msg){const el=document.getElementById('gdrive-msg');if(el)el.textContent=msg;}
 
@@ -1409,14 +1713,556 @@ function showToast(msg){
 }
 
 // ═══════════════════════════════════════════════════
+// ANTHROPIC API KEY
+// ═══════════════════════════════════════════════════
+function getAnthropicKey(){return localStorage.getItem('yagoub-anthropic-key')||'';}
+function saveAnthropicKey(){
+  const val=(document.getElementById('anthropic-key-input')||{}).value||'';
+  if(!val.startsWith('sk-ant-')){alert('That doesn\'t look like a valid Anthropic key. It should start with sk-ant-');return;}
+  localStorage.setItem('yagoub-anthropic-key',val);
+  updateAnthropicKeyUI();
+  showToast('API key saved');
+}
+function clearAnthropicKey(){
+  localStorage.removeItem('yagoub-anthropic-key');
+  const inp=document.getElementById('anthropic-key-input');if(inp)inp.value='';
+  updateAnthropicKeyUI();
+}
+function updateAnthropicKeyUI(){
+  const key=getAnthropicKey();
+  const status=document.getElementById('anthropic-key-status');
+  const clearBtn=document.getElementById('anthropic-clear-btn');
+  const inp=document.getElementById('anthropic-key-input');
+  if(key){
+    if(status)status.textContent='✓ Key saved — '+key.slice(0,12)+'…';
+    if(clearBtn)clearBtn.style.display='inline-flex';
+    if(inp)inp.value='';
+  }else{
+    if(status)status.textContent='No key saved yet.';
+    if(clearBtn)clearBtn.style.display='none';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// MODAL HELPERS
+// ═══════════════════════════════════════════════════
+let _currentMLSubject=null;
+let _aiMarkingParsed=[];
+let _bulkParsed=[];
+let _bulkAnswerFiles=[];
+let _bulkMSFiles=[];
+let _bulkImageFiles=[];
+
+function closeModal(id){
+  const m=document.getElementById(id);if(m)m.style.display='none';
+  document.body.style.overflow='';
+}
+function openModal(id){
+  const m=document.getElementById(id);if(m)m.style.display='block';
+  document.body.style.overflow='hidden';
+}
+
+// ═══════════════════════════════════════════════════
+// MARK SCHEME AUTO-FETCH
+// ═══════════════════════════════════════════════════
+
+// Subject slug map for pastpapers.co
+const PP_SUBJECT_SLUGS={
+  '0580':'Mathematics-0580',
+  '0610':'Biology-0610',
+  '0620':'Chemistry-0620',
+  '0625':'Physics-0625',
+  '0452':'Accounting-0452',
+  '0478':'Computer-Science-0478',
+};
+
+// Session code → letter used in filename (s=MJ, w=ON, m=FM)
+const PP_SESSION_LETTER={'M/J':'s','O/N':'w','F/M':'m'};
+
+// Session code → URL slug
+const PP_SESSION_SLUG={'M/J':'may-june','O/N':'oct-nov','F/M':'march'};
+
+function buildMSUrl(parsed){
+  // parsed from parseCIECode — needs syllabus, paper (e.g. "Paper 21"), session, year
+  if(!parsed||!parsed.syllabus||!parsed.paper||!parsed.year)return null;
+  const code=parsed.syllabus;
+  const slug=PP_SUBJECT_SLUGS[code];
+  if(!slug)return null;
+
+  // Extract paper number — "Paper 21" → "21"
+  const paperNum=parsed.paper.replace('Paper ','').trim();
+
+  // Work out session key from parsed.session label
+  let sessKey=null;
+  for(const[k,v] of Object.entries({'M/J':'May/Jun','O/N':'Oct/Nov','F/M':'Feb/Mar'})){
+    if(parsed.session&&parsed.session.startsWith(v.split('/')[0]))sessKey=k;
+  }
+  // also try direct match
+  if(!sessKey){
+    if(parsed.session==='May/Jun')sessKey='M/J';
+    else if(parsed.session==='Oct/Nov')sessKey='O/N';
+    else if(parsed.session==='Feb/Mar')sessKey='F/M';
+  }
+  if(!sessKey)return null;
+
+  const sessLetter=PP_SESSION_LETTER[sessKey];
+  const sessSlug=PP_SESSION_SLUG[sessKey];
+  const yy=String(parsed.year).slice(2);
+  const year=parsed.year;
+
+  // filename: e.g. 0580_s23_ms_21.pdf
+  const filename=`${code}_${sessLetter}${yy}_ms_${paperNum}.pdf`;
+  const url=`https://pastpapers.co/caie/IGCSE/${slug}/${year}-${sessSlug}/${filename}`;
+  return{url,filename};
+}
+
+function previewMSUrl(){
+  const raw=(document.getElementById('ai-mark-code')||{}).value||'';
+  const preview=document.getElementById('ai-mark-ms-preview');
+  const urlEl=document.getElementById('ai-mark-ms-url');
+  const linkEl=document.getElementById('ai-mark-ms-link');
+  const statusEl=document.getElementById('ai-mark-ms-status');
+  if(!preview)return;
+  if(!raw.trim()){preview.style.display='none';return;}
+  const parsed=parseCIECode(raw);
+  const ms=parsed?buildMSUrl(parsed):null;
+  if(ms){
+    preview.style.display='block';
+    urlEl.textContent=ms.filename;
+    linkEl.href=ms.url;
+    statusEl.textContent='Will be fetched automatically when you click Mark.';
+    statusEl.style.color='#2e7d52';
+  }else{
+    preview.style.display='block';
+    urlEl.textContent='—';
+    if(linkEl)linkEl.href='#';
+    statusEl.textContent='Enter a full code like 0580/21/M/J/25 to auto-fetch the mark scheme.';
+    statusEl.style.color='var(--muted)';
+  }
+}
+
+async function fetchMSAsBase64(url){
+  // Use the Anthropic API to fetch the PDF via a web_search tool call — but actually
+  // we fetch it directly since it's a direct PDF link and use it as a document source.
+  // We fetch the PDF bytes via fetch() and convert to base64.
+  const resp=await fetch(url);
+  if(!resp.ok)throw new Error(`Mark scheme fetch failed (${resp.status}) — the paper may not be on pastpapers.co yet, or the code is wrong.`);
+  const buf=await resp.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  let binary='';
+  for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+function openAIMarking(sid){
+  if(!getAnthropicKey()){
+    alert('Please add your Anthropic API key in Settings first.');
+    showPage('settings',document.querySelector('[data-page=settings]'));
+    return;
+  }
+  _currentMLSubject=sid;
+  const subj=SUBJECTS.find(s=>s.id===sid);
+  const title=document.getElementById('ai-mark-title');
+  if(title)title.textContent='Mark a '+subj.name+' paper';
+  // reset
+  document.getElementById('ai-mark-step1').style.display='block';
+  document.getElementById('ai-mark-step2').style.display='none';
+  document.getElementById('ai-mark-results').style.display='none';
+  document.getElementById('ai-mark-loading').style.display='block';
+  const codeEl=document.getElementById('ai-mark-code');if(codeEl)codeEl.value='';
+  const ctxEl=document.getElementById('ai-mark-context');if(ctxEl)ctxEl.value='';
+  document.getElementById('ai-mark-answers-list').textContent='';
+  document.getElementById('ai-mark-ms-list').textContent='';
+  _bulkAnswerFiles=[];_bulkMSFiles=[];
+  openModal('ai-mark-modal');
+}
+
+function handleAnswerFiles(e){
+  _bulkAnswerFiles=Array.from(e.target.files);
+  document.getElementById('ai-mark-answers-list').textContent=_bulkAnswerFiles.map(f=>f.name).join(', ');
+}
+function handleMSFiles(e){
+  _bulkMSFiles=Array.from(e.target.files);
+  document.getElementById('ai-mark-ms-list').textContent=_bulkMSFiles.map(f=>f.name).join(', ');
+}
+
+async function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(',')[1]);
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function runAIMarking(){
+  const key=getAnthropicKey();
+  if(!key){alert('No API key set — go to Settings and add your Anthropic API key.');return;}
+  if(!_bulkAnswerFiles.length){alert('Please upload your answer images or PDF first.');return;}
+
+  const subj=SUBJECTS.find(s=>s.id===_currentMLSubject);
+  const codeVal=(document.getElementById('ai-mark-code')||{}).value||'';
+  const context=(document.getElementById('ai-mark-context')||{}).value||'';
+  const parsed=parseCIECode(codeVal);
+  const msInfo=parsed?buildMSUrl(parsed):null;
+
+  document.getElementById('ai-mark-step1').style.display='none';
+  document.getElementById('ai-mark-step2').style.display='block';
+  document.getElementById('ai-mark-loading').style.display='block';
+  document.getElementById('ai-mark-results').style.display='none';
+
+  const msgEl=document.getElementById('ai-mark-loading-txt');
+  const setMsg=m=>{if(msgEl)msgEl.textContent=m;};
+  setMsg('Starting…');
+
+  try{
+    const contentParts=[];
+    contentParts.push({type:'text',text:`You are marking a CIE IGCSE ${subj.name} (${subj.code}) past paper${codeVal?' — paper code: '+codeVal:''}.
+The student's answer images/PDFs follow first, then the official mark scheme.
+Identify every question the student got wrong or lost marks on. Compare carefully against the mark scheme.
+Return ONLY a JSON array — no markdown, no other text:
+[{"qnum":"Q4b","topic":"Algebra","difficulty":"easy|medium|hard","marks_lost":2,"question":"What the question asked","correct_solution":"Correct method/answer per mark scheme including key mark points","student_error":"Exactly what the student did wrong","notes":"Key thing to remember"}]
+Difficulty: easy=arithmetic/silly, medium=method error/concept gap, hard=didn't know at all.
+${context?'Student note: '+context:''}
+If the student got everything correct return: []`});
+
+    // Answers
+    setMsg('Uploading your answers…');
+    for(const f of _bulkAnswerFiles){
+      const b64=await fileToBase64(f);
+      const mt=f.type||'image/jpeg';
+      contentParts.push(mt==='application/pdf'
+        ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
+        :{type:'image',source:{type:'base64',media_type:mt,data:b64}});
+    }
+
+    contentParts.push({type:'text',text:'--- OFFICIAL MARK SCHEME BELOW ---'});
+
+    // Auto-fetch MS from pastpapers.co
+    let msLoaded=false;
+    if(msInfo){
+      try{
+        setMsg('Fetching mark scheme from pastpapers.co…');
+        const msB64=await fetchMSAsBase64(msInfo.url);
+        contentParts.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:msB64}});
+        msLoaded=true;
+        setMsg('Mark scheme loaded ✓ — sending to Claude…');
+      }catch(e){
+        setMsg('Could not auto-fetch mark scheme — checking manual upload…');
+      }
+    }
+
+    // Manual MS fallback
+    if(!msLoaded){
+      if(!_bulkMSFiles.length){
+        document.getElementById('ai-mark-loading').style.display='none';
+        document.getElementById('ai-mark-results').style.display='block';
+        const hint=msInfo?`Auto-fetch failed for <code>${msInfo.filename}</code>. The paper may not be on pastpapers.co yet.`:'Enter a full code like <code>0580/21/M/J/25</code> to auto-fetch, or upload the mark scheme manually below.';
+        document.getElementById('ai-mark-summary').innerHTML='Mark scheme unavailable. '+hint+' Expand "Upload manually" and try again.';
+        document.getElementById('ai-mark-questions-list').innerHTML='';
+        document.getElementById('ai-mark-save-btn').style.display='none';
+        return;
+      }
+      setMsg('Using manually uploaded mark scheme…');
+      for(const f of _bulkMSFiles){
+        const b64=await fileToBase64(f);
+        const mt=f.type||'image/jpeg';
+        contentParts.push(mt==='application/pdf'
+          ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
+          :{type:'image',source:{type:'base64',media_type:mt,data:b64}});
+      }
+    }
+
+    setMsg('Claude is marking your paper…');
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:4096,messages:[{role:'user',content:contentParts}]})
+    });
+
+    if(!resp.ok){const err=await resp.json();throw new Error(err.error?.message||'API error '+resp.status);}
+    const data=await resp.json();
+    const raw=data.content.find(c=>c.type==='text')?.text||'[]';
+    const clean=raw.replace(/```json|```/g,'').trim();
+    _aiMarkingParsed=JSON.parse(clean);
+    if(!Array.isArray(_aiMarkingParsed)||!_aiMarkingParsed.length){
+      document.getElementById('ai-mark-loading').style.display='none';
+      document.getElementById('ai-mark-results').style.display='block';
+      document.getElementById('ai-mark-summary').textContent='Claude found no mistakes — perfect paper!';
+      document.getElementById('ai-mark-questions-list').innerHTML='';
+      document.getElementById('ai-mark-save-btn').style.display='none';
+      return;
+    }
+    renderAIMarkingResults(codeVal);
+  }catch(err){
+    document.getElementById('ai-mark-loading').style.display='none';
+    document.getElementById('ai-mark-results').style.display='block';
+    document.getElementById('ai-mark-summary').textContent='Error: '+err.message;
+    document.getElementById('ai-mark-questions-list').innerHTML='';
+    document.getElementById('ai-mark-save-btn').style.display='none';
+  }
+}
+
+function renderAIMarkingResults(codeVal){
+  document.getElementById('ai-mark-loading').style.display='none';
+  document.getElementById('ai-mark-results').style.display='block';
+  document.getElementById('ai-mark-summary').textContent=`Claude found ${_aiMarkingParsed.length} mistake${_aiMarkingParsed.length!==1?'s':''}. Review and edit before saving.`;
+  document.getElementById('ai-mark-save-btn').style.display='inline-flex';
+  document.getElementById('ai-mark-questions-list').innerHTML=_aiMarkingParsed.map((q,i)=>`
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:.9rem 1.1rem">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:500">${q.qnum||'Q'+(i+1)}</span>
+        ${q.topic?`<span class="tag tag-topic">${q.topic}</span>`:''}
+        ${q.difficulty?`<span class="tag ${DIFF_CLASS[q.difficulty]||'tag-topic'}">${DIFF_LABEL[q.difficulty]||q.difficulty}</span>`:''}
+        ${q.marks_lost?`<span class="tag tag-marks">−${q.marks_lost}m</span>`:''}
+      </div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">Question</div>
+      <div style="font-size:13px;margin-bottom:8px">${q.question||''}</div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">Correct solution</div>
+      <div style="font-size:13px;background:var(--surface);border-radius:6px;padding:7px 10px;border-left:3px solid var(--border)">${q.correct_solution||''}</div>
+      ${q.student_error?`<div style="font-size:12px;color:var(--muted);font-style:italic;margin-top:7px">Your error: ${q.student_error}</div>`:''}
+    </div>`).join('');
+}
+
+function saveAIMarkingResults(){
+  if(!_aiMarkingParsed.length)return;
+  const codeVal=(document.getElementById('ai-mark-code')||{}).value||'';
+  const subj=SUBJECTS.find(s=>s.id===_currentMLSubject);
+  const parsed=parseCIECode(codeVal);
+  const paperLabel=parsed?parsed.label:(codeVal||subj.name+' paper');
+  const session={
+    id:Date.now(),
+    paper:paperLabel,
+    date:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}),
+    questions:_aiMarkingParsed.map(q=>({
+      id:Date.now()+Math.random(),
+      qnum:q.qnum||'',
+      topic:q.topic||'',
+      diff:q.difficulty||'',
+      marks:q.marks_lost?String(q.marks_lost):'',
+      q:q.question||'',
+      sol:q.correct_solution||'',
+      notes:(q.student_error?'My error: '+q.student_error+'. ':'')+( q.notes||''),
+      reviewed:false,
+    }))
+  };
+  mistakeData[_currentMLSubject].unshift(session);
+  saveLocal();
+  renderMLSubject(_currentMLSubject);
+  closeModal('ai-mark-modal');
+  showToast(`Saved ${session.questions.length} mistakes from AI marking`);
+  _aiMarkingParsed=[];
+}
+
+// ═══════════════════════════════════════════════════
+// BULK IMPORT
+// ═══════════════════════════════════════════════════
+function openBulkImport(sid){
+  _currentMLSubject=sid;
+  const subj=SUBJECTS.find(s=>s.id===sid);
+  const title=document.getElementById('bulk-import-title');
+  if(title)title.textContent='Import mistakes — '+subj.name;
+  document.getElementById('bulk-results').style.display='none';
+  document.getElementById('bulk-image-list').textContent='';
+  document.getElementById('bulk-json-status').textContent='';
+  _bulkImageFiles=[];_bulkParsed=[];
+  switchBulkTab('text');
+  openModal('bulk-import-modal');
+}
+
+function switchBulkTab(tab){
+  ['text','image','json'].forEach(t=>{
+    const btn=document.getElementById('bulk-tab-'+t);
+    const content=document.getElementById('bulk-tab-content-'+t);
+    const active=t===tab;
+    if(btn){btn.style.color=active?'var(--text)':'var(--muted)';btn.style.borderBottomColor=active?'var(--text)':'transparent';}
+    if(content)content.style.display=active?'block':'none';
+  });
+}
+
+function handleBulkImages(e){
+  _bulkImageFiles=Array.from(e.target.files);
+  document.getElementById('bulk-image-list').textContent=_bulkImageFiles.map(f=>f.name).join(', ');
+}
+
+function handleBulkJSON(e){
+  const file=e.target.files[0];if(!file)return;
+  const status=document.getElementById('bulk-json-status');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      // accept either a subject export (has .papers) or a full backup (has .mistakes)
+      let sessions=[];
+      if(d.papers&&Array.isArray(d.papers)){
+        sessions=d.papers.map(p=>({
+          id:Date.now()+Math.random(),
+          paper:p.paper||'Imported',
+          date:p.date||new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}),
+          questions:(p.questions||[]).map(q=>({id:Date.now()+Math.random(),qnum:q.question_number||'',topic:q.topic||'',diff:Object.keys(DIFF_LABEL).find(k=>DIFF_LABEL[k]===q.difficulty)||'',marks:q.marks?String(q.marks):'',q:q.question||'',sol:q.correct_solution||'',notes:q.notes||'',reviewed:q.reviewed||false}))
+        }));
+      } else if(d.mistakes){
+        const sid=_currentMLSubject;
+        sessions=d.mistakes[sid]||[];
+      }
+      if(!sessions.length){status.textContent='No sessions found in this file.';return;}
+      _bulkParsed=sessions;
+      renderBulkResults('json',sessions.length+' session(s) ready to import',sessions.flatMap(s=>s.questions));
+      status.textContent='';
+    }catch(err){status.textContent='Could not parse file: '+err.message;}
+  };
+  reader.readAsText(file);
+}
+
+async function runBulkImport(type){
+  const key=getAnthropicKey();
+  if(type!=='json'&&!key){alert('Please add your Anthropic API key in Settings first.');showPage('settings',document.querySelector('[data-page=settings]'));return;}
+
+  const codeVal=type==='text'?(document.getElementById('bulk-code-text')||{}).value||'':
+                type==='image'?(document.getElementById('bulk-code-image')||{}).value||'':'';
+
+  if(type==='text'){
+    const text=(document.getElementById('bulk-text-input')||{}).value||'';
+    if(!text.trim()){alert('Please enter your mistakes.');return;}
+    await parseBulkWithClaude('text',{text,codeVal});
+  } else if(type==='image'){
+    if(!_bulkImageFiles.length){alert('Please upload at least one image.');return;}
+    await parseBulkWithClaude('image',{files:_bulkImageFiles,codeVal});
+  }
+}
+
+async function parseBulkWithClaude(type,opts){
+  const key=getAnthropicKey();
+  const subj=SUBJECTS.find(s=>s.id===_currentMLSubject);
+  const loadingDiv=document.createElement('div');
+  loadingDiv.style.cssText='text-align:center;padding:1rem;font-size:13px;color:var(--muted)';
+  loadingDiv.textContent='Parsing with Claude…';
+  document.getElementById('bulk-results').style.display='block';
+  document.getElementById('bulk-questions-list').innerHTML='';
+  document.getElementById('bulk-summary').textContent='';
+  document.getElementById('bulk-save-btn').style.display='none';
+  document.getElementById('bulk-questions-list').appendChild(loadingDiv);
+
+  const systemPrompt=`Extract mistake entries from the following content for a CIE IGCSE ${subj.name} (${subj.code}) student.
+Return ONLY a JSON array, no other text:
+[{"qnum":"Q4b","topic":"Algebra","difficulty":"easy|medium|hard","marks":"2","question":"what the question asked","correct_solution":"correct method/answer","notes":"key thing to remember"}]
+If a field is unclear, leave it as an empty string. Difficulty: easy=silly mistake, medium=concept gap, hard=didn't know it.`;
+
+  try{
+    const contentParts=[];
+    if(type==='text'){
+      contentParts.push({type:'text',text:systemPrompt+'\n\nContent to parse:\n'+opts.text});
+    } else {
+      contentParts.push({type:'text',text:systemPrompt+'\n\nParse the mistakes from these images:'});
+      for(const f of opts.files){
+        const b64=await fileToBase64(f);
+        contentParts.push({type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data:b64}});
+      }
+    }
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:4096,messages:[{role:'user',content:contentParts}]})
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||'API error '+resp.status);}
+    const data=await resp.json();
+    const raw=data.content.find(c=>c.type==='text')?.text||'[]';
+    const clean=raw.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean);
+    if(!Array.isArray(parsed)||!parsed.length){
+      document.getElementById('bulk-questions-list').innerHTML='<div style="color:var(--muted);font-size:13px">No mistakes found — try adding more detail.</div>';
+      document.getElementById('bulk-summary').textContent='Nothing found.';
+      return;
+    }
+    _bulkParsed=[{
+      id:Date.now(),
+      paper:opts.codeVal?(parseCIECode(opts.codeVal)||{label:opts.codeVal}).label:'Bulk import',
+      date:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}),
+      questions:parsed.map(q=>({id:Date.now()+Math.random(),qnum:q.qnum||'',topic:q.topic||'',diff:q.difficulty||'',marks:q.marks||'',q:q.question||'',sol:q.correct_solution||'',notes:q.notes||'',reviewed:false}))
+    }];
+    renderBulkResults(type,parsed.length+' mistakes found',parsed);
+  }catch(err){
+    document.getElementById('bulk-questions-list').innerHTML=`<div style="color:#b5451b;font-size:13px">Error: ${err.message}</div>`;
+    document.getElementById('bulk-summary').textContent='';
+  }
+}
+
+function renderBulkResults(type,summaryText,questions){
+  document.getElementById('bulk-results').style.display='block';
+  document.getElementById('bulk-summary').textContent=summaryText;
+  document.getElementById('bulk-save-btn').style.display='inline-flex';
+  document.getElementById('bulk-questions-list').innerHTML=questions.map((q,i)=>`
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:.8rem 1rem">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;flex-wrap:wrap">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:500">${q.qnum||q.question_number||'Q'+(i+1)}</span>
+        ${(q.topic)?`<span class="tag tag-topic">${q.topic}</span>`:''}
+        ${(q.diff||q.difficulty)?`<span class="tag ${DIFF_CLASS[q.diff||q.difficulty]||'tag-topic'}">${DIFF_LABEL[q.diff||q.difficulty]||q.diff||q.difficulty}</span>`:''}
+        ${(q.marks)?`<span class="tag tag-marks">${q.marks}m</span>`:''}
+      </div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:5px">${q.q||q.question||''}</div>
+      <div style="font-size:12px;color:var(--muted);background:var(--surface);border-radius:6px;padding:6px 9px;border-left:2px solid var(--border)">${q.sol||q.correct_solution||''}</div>
+    </div>`).join('');
+}
+
+function clearBulkResults(){
+  document.getElementById('bulk-results').style.display='none';
+  _bulkParsed=[];
+}
+
+function saveBulkResults(){
+  if(!_bulkParsed.length)return;
+  _bulkParsed.forEach(sess=>{mistakeData[_currentMLSubject].unshift(sess);});
+  saveLocal();
+  renderMLSubject(_currentMLSubject);
+  closeModal('bulk-import-modal');
+  const total=_bulkParsed.reduce((a,s)=>a+s.questions.length,0);
+  showToast('Saved '+total+' mistakes to your log');
+  _bulkParsed=[];
+}
+
+// ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
 loadLocal();
 buildPages();
+initGDriveToken();
 handleGDriveCallback();
 updateGDriveUI();
+updateAnthropicKeyUI();
 checkMigration();
 renderAll();
+
+// If Drive was previously connected but token has expired, show a prominent reconnect banner
+if(gdriveClientId && !gdriveToken){
+  const banner=document.getElementById('reconnect-banner');
+  if(banner)banner.style.display='flex';
+  setSyncStatus('idle');
+  setGDriveMsg('Your session expired. Reconnect to sync your data.');
+}
+
+// If token is valid and we just loaded the page normally (not via OAuth redirect), auto-load from Drive
+if(gdriveToken && !location.hash.includes('access_token')){
+  setGDriveMsg('Reconnected — loading latest data from Drive…');
+  setSyncStatus('saving');
+  gdriveLoad(true);
+}
+
+// Warn if user closes tab with unsaved pending changes
+window.addEventListener('beforeunload',()=>{
+  if(gdriveToken&&_autoSaveTimer){clearTimeout(_autoSaveTimer);autoSaveToDrive();}
+});
+
+// Every 5 min, check if token is still valid
+setInterval(()=>{
+  const stored=JSON.parse(localStorage.getItem('yagoub-gdrive-token')||'null');
+  if(stored&&stored.expiry&&Date.now()>stored.expiry){
+    gdriveToken=null;
+    clearGDriveToken();
+    setSyncStatus('idle');
+    const banner=document.getElementById('reconnect-banner');
+    if(banner)banner.style.display='flex';
+    showToast('Drive session expired — reconnect to keep saving');
+  }
+},300000);
 </script>
 </body>
 </html>
