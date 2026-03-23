@@ -469,20 +469,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <button class="modal-close" onclick="closeModal('ai-modal')">×</button>
     </div>
     <div id="ai-step1">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:1.1rem;line-height:1.7">Enter the paper code and upload your answers.</p>
-
-      <!-- MS mode toggle -->
-      <div style="display:flex;gap:7px;margin-bottom:1.1rem;flex-wrap:wrap">
-        <button id="ai-ms-mode-knowledge" onclick="setAIMSMode('knowledge')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
-          <span style="font-size:12px;font-weight:600;color:inherit">⚡ Claude's knowledge</span>
-          <span style="font-size:10px;color:var(--muted);font-weight:400">~5k tokens · faster · cheaper</span>
-        </button>
-        <button id="ai-ms-mode-fetch" onclick="setAIMSMode('fetch')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
-          <span style="font-size:12px;font-weight:600;color:inherit">📋 Fetch mark scheme</span>
-          <span style="font-size:10px;color:var(--muted);font-weight:400">~25k tokens · most accurate</span>
-        </button>
-      </div>
-      <div id="ai-ms-note" style="font-size:12px;color:var(--muted);margin-bottom:1rem;padding:8px 11px;background:var(--bg);border-radius:8px;border:1px solid var(--border)"></div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1.1rem;line-height:1.7">Enter the paper code and upload your answers. The mark scheme is fetched automatically from papacambridge.</p>
       <div class="ff">
         <div class="field">
           <label>Paper code</label>
@@ -566,21 +553,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
     <div id="quick-step1">
       <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.7">
-        Upload your answer PDF or photos. Claude reads the paper code automatically, identifies your subject, and logs all mistakes in the right place.
+        Upload your answer PDF or photos. Claude reads the paper code automatically, identifies your subject, fetches the mark scheme, and logs all mistakes in the right place — no setup needed.
       </p>
-
-      <!-- MS mode toggle -->
-      <div style="display:flex;gap:7px;margin-bottom:1rem;flex-wrap:wrap">
-        <button id="quick-ms-mode-knowledge" onclick="setQuickMSMode('knowledge')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
-          <span style="font-size:12px;font-weight:600;color:inherit">⚡ Claude's knowledge</span>
-          <span style="font-size:10px;color:var(--muted);font-weight:400">~5k tokens · faster · cheaper</span>
-        </button>
-        <button id="quick-ms-mode-fetch" onclick="setQuickMSMode('fetch')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
-          <span style="font-size:12px;font-weight:600;color:inherit">📋 Fetch mark scheme</span>
-          <span style="font-size:10px;color:var(--muted);font-weight:400">~25k tokens · most accurate</span>
-        </button>
-      </div>
-      <div id="quick-ms-note" style="font-size:12px;color:var(--muted);margin-bottom:1rem;padding:8px 11px;background:var(--bg);border-radius:8px;border:1px solid var(--border)"></div>
 
       <!-- Upload zone + paste button -->
       <div class="ff">
@@ -1621,42 +1595,7 @@ function extractJSONArray(text){
 }
 
 // ══════════════════════════════════════════
-// MS MODE TOGGLE
-// ══════════════════════════════════════════
-let _aiMSMode='knowledge';     // 'knowledge' | 'fetch'
-let _quickMSMode='knowledge';  // 'knowledge' | 'fetch'
-
-const MS_NOTES={
-  knowledge:'Claude uses its training knowledge of CIE mark schemes — accurate for 2020–2025 papers, saves ~20k tokens per paper.',
-  fetch:'Claude fetches the official mark scheme PDF from PapaCambridge — most precise but uses ~25k tokens and may hit rate limits.',
-};
-
-function setAIMSMode(mode){
-  _aiMSMode=mode;
-  const kb=document.getElementById('ai-ms-mode-knowledge');
-  const ft=document.getElementById('ai-ms-mode-fetch');
-  const note=document.getElementById('ai-ms-note');
-  if(kb)kb.className='ibtn'+(mode==='knowledge'?' ok':'');
-  if(ft)ft.className='ibtn'+(mode==='fetch'?' ok':'');
-  if(note)note.textContent=MS_NOTES[mode];
-  // Show/hide the manual MS upload and code preview based on mode
-  const det=document.querySelector('#ai-step1 details');
-  const prev=document.getElementById('ai-ms-preview');
-  if(det)det.style.display=mode==='fetch'?'block':'none';
-  if(prev&&mode==='knowledge')prev.style.display='none';
-}
-
-function setQuickMSMode(mode){
-  _quickMSMode=mode;
-  const kb=document.getElementById('quick-ms-mode-knowledge');
-  const ft=document.getElementById('quick-ms-mode-fetch');
-  const note=document.getElementById('quick-ms-note');
-  if(kb)kb.className='ibtn'+(mode==='knowledge'?' ok':'');
-  if(ft)ft.className='ibtn'+(mode==='fetch'?' ok':'');
-  if(note)note.textContent=MS_NOTES[mode];
-  const det=document.querySelector('#quick-step1 details');
-  if(det)det.style.display=mode==='fetch'?'block':'none';
-}
+// AI MARKING
 // ══════════════════════════════════════════
 function openAIModal(sid){
   if(!getAKey()){alert('Add your Anthropic API key in Settings first.');nav('settings',document.querySelector('[data-page=settings]'));return;}
@@ -1672,7 +1611,6 @@ function openAIModal(sid){
   document.getElementById('ai-answers-list').textContent='';
   document.getElementById('ai-ms-manual-list').textContent='';
   document.getElementById('ai-ms-preview').style.display='none';
-  setAIMSMode('knowledge'); // default to knowledge mode
   openModal('ai-modal');
 }
 function handleAnswers(e){_answerFiles=Array.from(e.target.files);document.getElementById('ai-answers-list').textContent=_answerFiles.map(f=>f.name).join(', ');}
@@ -1746,103 +1684,48 @@ async function buildAnswerParts(files,setMsg){
   return parts;
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// SYLLABUS FILTER — topics removed since 2020 that are NO LONGER in scope
-// for the May/June 2026 exams. When marking papers from 2020 onwards, Claude
-// skips any question that is ENTIRELY about one of these removed topics.
-// Sources: official Cambridge syllabuses + verified comparison resources.
-// ══════════════════════════════════════════════════════════════════════════
+// Topics removed from each subject for the 2026 syllabus (CIE IGCSE)
+// Claude will skip questions that are entirely about these removed topics
 const REMOVED_2026={
-
-  // ── MATHEMATICS 0580 ──────────────────────────────────────────────────
-  // No topic removals in the 2020-2024 syllabus period.
-  // The following were removed only in the 2025-2027 syllabus revision.
-  '0580': [
-    'proper subsets: formal notation and study of proper subsets (subset symbol)',
-    'linear programming: graphical methods for solving LP problems',
-    'triangle congruence criteria: memorisation of SSS, SAS, AAS, RHS rules by name',
-    'data collection sheet design: designing questionnaires and data collection methods',
-    'box-and-whisker plots: construction and interpretation',
-  ],
-
-  // ── BIOLOGY 0610 ──────────────────────────────────────────────────────
-  // No significant topic removals between 2020 and 2025.
-  // All removals below are from the 2026-2028 syllabus revision.
   '0610': [
-    'kidney dialysis and kidney transplants',
-    'voluntary and involuntary reflex actions: detailed mechanism of reflex arcs',
-    'effects of heroin on synapses: detailed synaptic mechanism',
-    'effect of antibiotics on bacteria: mechanism of antibiotic action',
-    'effects of nicotine and heroin on the body',
-    'antenatal care and the process of labour and childbirth',
-    'comparison of breast feeding versus bottle feeding',
-    'methods of birth control in humans',
-    'how HIV affects and destroys the immune system',
-    'distinction between phenotypic variation and genotypic variation: formal definitions',
-    'inheritance of sickle-cell anaemia: Punnett square crosses and carrier ratios',
-    'definitions of biological fitness and evolution',
-    'providing sufficient food for a growing population and causes of famine',
-    'nuclear fall-out, discarded rubbish and chemical waste as types of pollution',
-    'detailed effects and causes of acid rain: sulfur dioxide and nitrogen oxides',
-    'water pollution by female hormones: oestrogen from oral contraceptives',
-    'definition and explanation of sustainable development',
-    'fossil fuels as an environmental or pollution topic',
-    'sewage treatment processes: primary and secondary treatment stages',
+    'kidney dialysis and transplants',
+    'voluntary and involuntary actions / reflex arcs detail',
+    'effects of heroin on synapses',
+    'effect of antibiotics on bacteria',
+    'effect of nicotine and heroin on the body',
+    'antenatal care and labour',
+    'breast feeding vs bottled milk',
+    'methods of birth control',
+    'how HIV affects the immune system',
+    'phenotypic and genotypic variation definitions',
+    'inheritance of sickle-cell anaemia',
+    'definitions of fitness and evolution',
+    'providing sufficient food / causes of famine',
+    'nuclear fall-out / discarded rubbish / chemical waste',
+    'acid rain details',
+    'water pollution by female hormones',
+    'sustainable development definition',
+    'fossil fuels',
+    'sewage treatment',
   ],
-
-  // ── CHEMISTRY 0620 ────────────────────────────────────────────────────
-  // Significant removals from the 2023-2025 syllabus revision (applied from 2023).
-  // Papers from 2020, 2021, 2022 contain questions on these topics - skip them all.
-  // No further removals for 2026.
-  '0620': [
-    'weak bases: definition, concept and examples such as ammonia as a weak base',
-    'thermal decomposition of metal hydroxides, carbonates and nitrates',
-    'extraction of zinc by carbon reduction: zinc oxide reduced by coke in a furnace',
-    'control of soil acidity using lime: agricultural liming',
-    'properties of sulfur: allotropes, uses and reactions of sulfur',
-    'properties of sulfur dioxide: reactions and environmental effects',
-    'properties and industrial uses of concentrated sulfuric acid',
-    'inorganic carbon chemistry: manufacture of lime and cement from limestone',
-    'chemistry of carbon dioxide in an inorganic or industrial context',
-    'natural macromolecules: fats, oils and carbohydrates in organic chemistry',
-  ],
-
-  // ── PHYSICS 0625 ──────────────────────────────────────────────────────
-  // Significant removals from the 2023-2028 syllabus revision (applied from 2023).
-  // Papers from 2020, 2021, 2022 contain questions on these topics - skip them all.
-  // Cambridge confirmed no further changes for 2026.
+  // Physics: digital electronics removed in 2023 syllabus update (still applies to 2026)
   '0625': [
-    'barometer: measuring atmospheric pressure using a mercury barometer',
-    'manometer: measuring gas pressure using a U-tube manometer',
-    'specific latent heat: definition, formula (E = mL) and calculations',
-    'thermometer types: clinical thermometer and laboratory thermometer construction and use',
-    'thermocouple thermometer: principle, construction and uses',
-    'logic gates and digital electronics: AND, OR, NOT, NAND, NOR gates and truth tables',
-    'galvanometer: use as a sensitive current-detecting and direction-detecting instrument',
+    'digital electronics / logic gates',
   ],
-
-  // ── ACCOUNTING 0452 ───────────────────────────────────────────────────
-  // No topic removals at any point from 2020 to 2026.
+  // No significant removals for these subjects
+  '0580': [],
+  '0620': [],
   '0452': [],
-
-  // ── COMPUTER SCIENCE 0478 ─────────────────────────────────────────────
-  // 2023 syllabus revision was structural only - NO topic content was removed.
-  // Pre-release material was replaced by scenario-based question in Paper 2.
-  // All existing content topics remain. Logic gates remain IN CS unlike Physics.
   '0478': [],
 };
 
-function buildMarkingPrompt(subjDesc,parsedLabel,comment,syllabusCode,knowledgeMode){
+function buildMarkingPrompt(subjDesc,parsedLabel,comment,syllabusCode){
   const removed=syllabusCode?REMOVED_2026[syllabusCode]||[]:[];
   const removedNote=removed.length>0
-    ?`\n\nSYLLABUS FILTER — 2026 exam: The following topics were removed from the syllabus and will NOT appear in the student's actual exam. If a question is entirely about one of these removed topics, DO NOT include it — skip it completely:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
+    ?`\n\nIMPORTANT — 2026 SYLLABUS FILTER: The following topics have been REMOVED from the ${syllabusCode} syllabus for 2026 exams. If a question is entirely about one of these removed topics, DO NOT include it in the mistakes array — skip it entirely:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
     :'';
-  const msNote=knowledgeMode
-    ?`\nIMPORTANT: No mark scheme PDF is provided. Use your detailed knowledge of CIE IGCSE ${subjDesc} mark schemes and marking principles to assess the student's answers. You know the mark points, method marks, and accept/reject criteria for CIE papers — apply them rigorously as an experienced CIE examiner would.`
-    :'';
-  return `You are an experienced CIE examiner marking a CIE IGCSE ${subjDesc} past paper${parsedLabel?' — '+parsedLabel:''}.
-${comment?'IMPORTANT student note: '+comment+'\n':''}${msNote}
-Student answers come first${knowledgeMode?'.':', then the official mark scheme.'}
+  return `You are marking a CIE IGCSE ${subjDesc} past paper${parsedLabel?' — '+parsedLabel:''}.
+${comment?'IMPORTANT student note: '+comment+'\n':''}Student answers come first, then the official mark scheme.
 Identify every question where marks were lost. Return ONLY a JSON array (no markdown):
 [{"qnum":"Q4b","topic":"Algebra","difficulty":"easy|medium|hard","marks_lost":2,"question":"What was asked","correct_solution":"Correct answer per mark scheme with key marking points","student_error":"What the student did wrong","notes":"Key thing to remember next time"}]
 easy=silly/arithmetic mistake, medium=method error or concept gap, hard=didn't know the content at all.
@@ -1868,30 +1751,35 @@ async function runMarking(){
   try{
     const answerParts=await buildAnswerParts(_answerFiles,setMsg);
 
-    // Get mark scheme — respect MS mode toggle
+    // Get mark scheme — try URL source first, then manual upload
     let msPart=null;
-    if(_aiMSMode==='fetch'){
-      if(msInfo){setMsg('Linking mark scheme from PapaCambridge…');msPart=buildMSDocPart(msInfo);}
-      if(!msPart&&_manualMSFiles.length){
-        setMsg('Using manually uploaded mark scheme…');
-        const b=await f2b64(_manualMSFiles[0]);
-        const mt=_manualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
-        msPart=mt==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}};
-      }
-      if(!msPart){
-        document.getElementById('ai-loading').style.display='none';
-        document.getElementById('ai-results').style.display='block';
-        document.getElementById('ai-summary').textContent='No mark scheme available. Enter a full paper code or upload the mark scheme manually.';
-        document.getElementById('ai-q-list').innerHTML='';
-        document.getElementById('ai-save-btn').style.display='none';
-        return;
-      }
+    if(msInfo){
+      setMsg('Linking mark scheme from papacambridge…');
+      msPart=buildMSDocPart(msInfo);
+    }
+    if(!msPart&&_manualMSFiles.length){
+      setMsg('Using manually uploaded mark scheme…');
+      const b=await f2b64(_manualMSFiles[0]);
+      const mt=_manualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
+      msPart=mt==='application/pdf'
+        ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b}}
+        :{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}};
+    }
+    if(!msPart){
+      document.getElementById('ai-loading').style.display='none';
+      document.getElementById('ai-results').style.display='block';
+      document.getElementById('ai-summary').textContent='No mark scheme available. Enter a full paper code or upload the mark scheme manually.';
+      document.getElementById('ai-q-list').innerHTML='';
+      document.getElementById('ai-save-btn').style.display='none';
+      return;
     }
 
     const subjDesc=subj.name+' ('+subj.code+')';
-    const promptText=buildMarkingPrompt(subjDesc,parsed?parsed.label:codeVal,comment,subj.code,_aiMSMode==='knowledge');
-    const parts=[{type:'text',text:promptText},...answerParts];
-    if(msPart){parts.push({type:'text',text:'--- OFFICIAL MARK SCHEME ---'});parts.push(msPart);}
+    const parts=[
+      {type:'text',text:buildMarkingPrompt(subjDesc,parsed?parsed.label:codeVal,comment,subj.code)},
+      ...answerParts,
+      {type:'text',text:'--- OFFICIAL MARK SCHEME ---'},
+      msPart
     ];
     setMsg('Claude is marking your paper…');
     const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,messages:[{role:'user',content:parts}]},setMsg);
@@ -2164,7 +2052,6 @@ function openQuickUpload(){
   document.getElementById('quick-save-row').style.display='flex';
   const icon=document.getElementById('quick-upload-icon');if(icon)icon.textContent='📄';
   const hint=document.getElementById('quick-upload-hint');if(hint)hint.textContent='Tap to choose PDF or photos from Files, Photos, or iCloud';
-  setQuickMSMode('knowledge'); // default to knowledge mode
   openModal('quick-modal');
 }
 
@@ -2253,33 +2140,34 @@ async function runQuickMark(){
 
     const msInfo=parsed?buildMSUrl(parsed):null;
 
-    // Build mark scheme part — respect mode toggle
+    // Build mark scheme part
     let msPart=null;
-    if(_quickMSMode==='fetch'){
-      if(msInfo){setMsg('Linking mark scheme from PapaCambridge…');msPart=buildMSDocPart(msInfo);}
-      if(!msPart&&_quickManualMSFiles.length){
-        setMsg('Using manually uploaded mark scheme…');
-        const b=await f2b64(_quickManualMSFiles[0]);
-        const mt=_quickManualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
-        msPart=mt==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}};
-      }
-      if(!msPart){
-        document.getElementById('quick-loading').style.display='none';
-        document.getElementById('quick-results').style.display='block';
-        if(detBox)detBox.style.display='flex';
-        document.getElementById('quick-summary').innerHTML=(parsed?'Detected <strong>'+parsed.label+'</strong> but could not fetch the mark scheme. ':'Could not detect paper code or find mark scheme. ')+'Expand below and upload the mark scheme manually.';
-        document.getElementById('quick-q-list').innerHTML='';
-        document.getElementById('quick-save-btn').style.display='none';
-        document.getElementById('quick-save-row').style.display='none';
-        return;
-      }
+    if(msInfo){setMsg('Linking mark scheme from papacambridge…');msPart=buildMSDocPart(msInfo);}
+    if(!msPart&&_quickManualMSFiles.length){
+      setMsg('Using manually uploaded mark scheme…');
+      const b=await f2b64(_quickManualMSFiles[0]);
+      const mt=_quickManualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
+      msPart=mt==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}};
+    }
+    if(!msPart){
+      document.getElementById('quick-loading').style.display='none';
+      document.getElementById('quick-results').style.display='block';
+      if(detBox)detBox.style.display='flex';
+      document.getElementById('quick-summary').innerHTML=(parsed?'Detected <strong>'+parsed.label+'</strong> but could not fetch the mark scheme. ':'Could not detect a paper code or find the mark scheme. ')+'Expand the section below and upload the mark scheme manually.';
+      document.getElementById('quick-q-list').innerHTML='';
+      document.getElementById('quick-save-btn').style.display='none';
+      document.getElementById('quick-save-row').style.display='none';
+      return;
     }
 
     // Step 2: full marking call
     const subjDesc=subj?subj.name+' ('+subj.code+')':'a CIE IGCSE subject';
-    const promptText=buildMarkingPrompt(subjDesc,parsed?parsed.label:detectedCode,comment,subj?subj.code:null,_quickMSMode==='knowledge');
-    const parts=[{type:'text',text:promptText},...fileParts];
-    if(msPart){parts.push({type:'text',text:'--- OFFICIAL MARK SCHEME ---'});parts.push(msPart);}
+    const parts=[
+      {type:'text',text:buildMarkingPrompt(subjDesc,parsed?parsed.label:detectedCode,comment,subj?subj.code:null)},
+      ...fileParts,
+      {type:'text',text:'--- OFFICIAL MARK SCHEME ---'},
+      msPart
+    ];
     setMsg('Claude is marking your paper…');
     const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,messages:[{role:'user',content:parts}]},setMsg);
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
