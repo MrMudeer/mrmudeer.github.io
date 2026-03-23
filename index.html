@@ -1752,59 +1752,85 @@ async function buildAnswerParts(files,setMsg){
 // skips any question that is ENTIRELY about one of these removed topics.
 // Sources: official Cambridge syllabuses + verified comparison resources.
 // ══════════════════════════════════════════════════════════════════════════
-const REMOVED_2026 = {
-  "0580": [
-    "proper subsets: formal notation and study of proper subsets (subset symbol)",
-    "linear programming: graphical methods for solving linear programming problems",
-    "triangle congruence criteria: memorisation of SSS, SAS, AAS, RHS rules by name",
-    "data collection (questionnaires and sampling): designing questionnaires and data collection methods",
-    "box-and-whisker plots: construction and interpretation"
-  ],
-  "0610": [
-    "kidney dialysis and kidney transplants",
-    "voluntary vs involuntary reflex actions: reflex arc details",
-    "effects of drugs on synapses (e.g. heroin) on the nervous system",
-    "mechanism of antibiotics on bacteria (why antibiotics kill bacteria but not viruses)",
-    "effects of nicotine and heroin on the body (detailed mechanisms)",
-    "antenatal care and childbirth: sections on labour and delivery",
-    "advantages of breast-feeding vs bottle-feeding",
-    "methods of human birth control (contraception)",
-    "HIV/AIDS: how HIV affects/destroys the immune system",
-    "phenotypic vs genotypic variation: formal distinction and definitions",
-    "sickle-cell anaemia inheritance: Punnett squares and carrier ratios",
-    "definitions of biological fitness and evolution",
-    "providing sufficient food for a growing population and causes of famine",
-    "pollution from nuclear fallout, rubbish and chemical waste",
-    "details of acid rain causes/effects (sulfur dioxide and nitrogen oxides)",
-    "water pollution by female hormones (oestrogen from contraceptives)",
-    "sustainable development: definition and explanation",
-    "fossil fuels in an environmental context",
-    "sewage treatment: primary and secondary treatment process details"
-  ],
-  "0620": [
-    "weak bases: definition and examples (e.g. ammonia as a weak base)",
-    "thermal decomposition of generic metal hydroxides, carbonates and nitrates",
-    "extraction of zinc by reduction (zinc oxide reduced by coke)",
-    "control of soil acidity (agricultural liming)",
-    "properties of sulfur: allotropes, uses and reactions",
-    "properties of sulfur dioxide: reactions and environmental effects",
-    "concentrated sulfuric acid: properties and industrial uses",
-    "inorganic carbon chemistry: lime and cement manufacture from limestone",
-    "carbon dioxide chemistry in industry and environment",
-    "natural macromolecules in organic chemistry: fats, oils and carbohydrates"
-  ],
-  "0625": [
-    "barometer: mercury barometer and measurement of atmospheric pressure",
-    "manometer: U-tube manometer for gas pressure measurement",
-    "specific latent heat (thermal capacity): definition, formula (E = mL), and calculations",
-    "thermometer types: clinical and laboratory thermometer construction and use (including thermocouples)",
-    "digital electronics: basic logic gates (AND, OR, NOT, NAND, NOR) and truth tables",
-    "galvanometer: use as sensitive current/direction indicator"
-  ],
-  "0452": [],
-  "0478": []
-};
+const REMOVED_2026={
 
+  // ── MATHEMATICS 0580 ──────────────────────────────────────────────────
+  // No topic removals in the 2020-2024 syllabus period.
+  // The following were removed only in the 2025-2027 syllabus revision.
+  '0580': [
+    'proper subsets: formal notation and study of proper subsets (subset symbol)',
+    'linear programming: graphical methods for solving LP problems',
+    'triangle congruence criteria: memorisation of SSS, SAS, AAS, RHS rules by name',
+    'data collection sheet design: designing questionnaires and data collection methods',
+    'box-and-whisker plots: construction and interpretation',
+  ],
+
+  // ── BIOLOGY 0610 ──────────────────────────────────────────────────────
+  // No significant topic removals between 2020 and 2025.
+  // All removals below are from the 2026-2028 syllabus revision.
+  '0610': [
+    'kidney dialysis and kidney transplants',
+    'voluntary and involuntary reflex actions: detailed mechanism of reflex arcs',
+    'effects of heroin on synapses: detailed synaptic mechanism',
+    'effect of antibiotics on bacteria: mechanism of antibiotic action',
+    'effects of nicotine and heroin on the body',
+    'antenatal care and the process of labour and childbirth',
+    'comparison of breast feeding versus bottle feeding',
+    'methods of birth control in humans',
+    'how HIV affects and destroys the immune system',
+    'distinction between phenotypic variation and genotypic variation: formal definitions',
+    'inheritance of sickle-cell anaemia: Punnett square crosses and carrier ratios',
+    'definitions of biological fitness and evolution',
+    'providing sufficient food for a growing population and causes of famine',
+    'nuclear fall-out, discarded rubbish and chemical waste as types of pollution',
+    'detailed effects and causes of acid rain: sulfur dioxide and nitrogen oxides',
+    'water pollution by female hormones: oestrogen from oral contraceptives',
+    'definition and explanation of sustainable development',
+    'fossil fuels as an environmental or pollution topic',
+    'sewage treatment processes: primary and secondary treatment stages',
+  ],
+
+  // ── CHEMISTRY 0620 ────────────────────────────────────────────────────
+  // Significant removals from the 2023-2025 syllabus revision (applied from 2023).
+  // Papers from 2020, 2021, 2022 contain questions on these topics - skip them all.
+  // No further removals for 2026.
+  '0620': [
+    'weak bases: definition, concept and examples such as ammonia as a weak base',
+    'thermal decomposition of metal hydroxides, carbonates and nitrates',
+    'extraction of zinc by carbon reduction: zinc oxide reduced by coke in a furnace',
+    'control of soil acidity using lime: agricultural liming',
+    'properties of sulfur: allotropes, uses and reactions of sulfur',
+    'properties of sulfur dioxide: reactions and environmental effects',
+    'properties and industrial uses of concentrated sulfuric acid',
+    'inorganic carbon chemistry: manufacture of lime and cement from limestone',
+    'chemistry of carbon dioxide in an inorganic or industrial context',
+    'natural macromolecules: fats, oils and carbohydrates in organic chemistry',
+  ],
+
+  // ── PHYSICS 0625 ──────────────────────────────────────────────────────
+  // Significant removals from the 2023-2028 syllabus revision (applied from 2023).
+  // Papers from 2020, 2021, 2022 contain questions on these topics - skip them all.
+  // Cambridge confirmed no further changes for 2026.
+  '0625': [
+    'barometer: measuring atmospheric pressure using a mercury barometer',
+    'manometer: measuring gas pressure using a U-tube manometer',
+    'specific latent heat: definition, formula (E = mL) and calculations',
+    'thermometer types: clinical thermometer and laboratory thermometer construction and use',
+    'thermocouple thermometer: principle, construction and uses',
+    'logic gates and digital electronics: AND, OR, NOT, NAND, NOR gates and truth tables',
+    'galvanometer: use as a sensitive current-detecting and direction-detecting instrument',
+  ],
+
+  // ── ACCOUNTING 0452 ───────────────────────────────────────────────────
+  // No topic removals at any point from 2020 to 2026.
+  '0452': [],
+
+  // ── COMPUTER SCIENCE 0478 ─────────────────────────────────────────────
+  // 2023 syllabus revision was structural only - NO topic content was removed.
+  // Pre-release material was replaced by scenario-based question in Paper 2.
+  // All existing content topics remain. Logic gates remain IN CS unlike Physics.
+  '0478': [],
+};
 
 function buildMarkingPrompt(subjDesc,parsedLabel,comment,syllabusCode,knowledgeMode){
   const removed=syllabusCode?REMOVED_2026[syllabusCode]||[]:[];
