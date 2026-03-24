@@ -1857,29 +1857,50 @@ const REMOVED_2026={
 function buildMarkingPrompt(subjDesc,parsedLabel,comment,syllabusCode,knowledgeMode){
   const removed=syllabusCode?REMOVED_2026[syllabusCode]||[]:[];
   const removedNote=removed.length>0
-    ?`\n\nSYLLABUS FILTER: The following topics are no longer in the 2026 syllabus. If a question is ENTIRELY about one of these, skip it — do not include it as a mistake:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
+    ?`\n\nSYLLABUS FILTER: These topics are no longer in the 2026 syllabus — skip questions that are entirely about them:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
     :'';
   const msSection=knowledgeMode
-    ?`You have no mark scheme PDF. Instead, use your expert knowledge of CIE IGCSE ${subjDesc} past papers to reconstruct what the mark scheme would say. You know exactly which mark points CIE awards, what working is required, what common errors lose marks, and what the accept/reject criteria are. Be as strict as a real CIE examiner — do NOT give benefit of the doubt.`
-    :`The official mark scheme follows the student's answers. Apply it exactly as CIE would.`;
+    ?`You have no mark scheme. Use your expert knowledge of CIE IGCSE ${subjDesc} to mark this paper.
+
+CRITICAL INSTRUCTIONS:
+- This student almost certainly made mistakes. Most students lose marks somewhere. Your job is to FIND them.
+- Do NOT assume an answer is correct just because it looks plausible. Check every step.
+- Apply CIE's strict marking rules: missing units lose marks, wrong sig figs lose marks, incomplete working loses marks, wrong method loses marks even with a correct final answer (unless follow-through applies).
+- For maths/physics/chemistry: check every calculation, every formula used, every step of working.
+- For biology/chemistry written answers: check for missing key words, incomplete explanations, wrong terminology.
+- Be a tough examiner. If in doubt, mark it wrong.`
+    :`The official mark scheme is provided. Apply it strictly — every mark point must be present to award the mark.`;
   return `You are a strict CIE IGCSE examiner marking a ${subjDesc} past paper${parsedLabel?' ('+parsedLabel+')':''}.
-${comment?'NOTE FROM STUDENT: '+comment+'\n':''}
+${comment?'STUDENT NOTE: '+comment+'\n':''}
 ${msSection}
 
-YOUR TASK: Go through EVERY question the student attempted. For each one, check whether their answer earns full marks. Be strict — partial working, missing units, wrong significant figures, incomplete explanations, and arithmetic errors all lose marks in CIE.
+Go through every question in the paper. For each question where the student loses marks, add an entry. For perfect answers, omit them.
 
-For every question where the student loses ANY marks, add an entry to the JSON array.
-For questions answered perfectly, do NOT include them.
+Return ONLY a JSON array, no markdown, no text before or after:
+[{"qnum":"3b","topic":"Quadratic equations","difficulty":"easy|medium|hard","marks_lost":2,"question":"What the question asked","correct_solution":"Full correct working/answer with all required steps and key mark points","student_error":"Exactly what was wrong or missing","notes":"What to revise"}]
 
-Return ONLY a valid JSON array — no markdown, no explanation, no preamble:
-[{"qnum":"3b","topic":"Quadratic equations","difficulty":"easy|medium|hard","marks_lost":2,"question":"Exact question that was asked","correct_solution":"Complete correct working and answer with all required steps and mark points","student_error":"Precisely what the student did wrong or omitted","notes":"What to remember or revise"}]
+difficulty: easy=arithmetic or silly error, medium=method gap or incomplete answer, hard=did not know the concept at all.
+Only return [] if you are CERTAIN every single answer is fully correct by CIE standards.${removedNote}`;
+}
 
-difficulty: easy = arithmetic/silly error, medium = method gap or incomplete, hard = did not know the concept.
-If the student genuinely made no errors on any question, return exactly: []
-${removedNote}`;
+async function fetchMSasBase64(url){
+  // Fetch the PDF in the browser and convert to base64
+  // This avoids Anthropic URL source restrictions
+  try{
+    const resp=await fetch(url);
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const buf=await resp.arrayBuffer();
+    const bytes=new Uint8Array(buf);
+    let binary='';
+    for(let i=0;i<bytes.byteLength;i++)binary+=String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }catch(e){
+    throw new Error('Could not fetch mark scheme: '+e.message+'. Try uploading it manually instead.');
+  }
 }
 
 function buildMSDocPart(msInfo){
+  // This is now only used as a placeholder — actual fetching done via fetchMSasBase64
   return {type:'document',source:{type:'url',url:msInfo.url}};
 }
 
@@ -1901,7 +1922,14 @@ async function runMarking(){
     // Get mark scheme — respect MS mode toggle
     let msPart=null;
     if(_aiMSMode==='fetch'){
-      if(msInfo){setMsg('Linking mark scheme from PapaCambridge…');msPart=buildMSDocPart(msInfo);}
+      if(msInfo){
+        try{
+          setMsg('Downloading mark scheme from PapaCambridge…');
+          const msB64=await fetchMSasBase64(msInfo.url);
+          msPart={type:'document',source:{type:'base64',media_type:'application/pdf',data:msB64}};
+          setMsg('Mark scheme loaded ✓');
+        }catch(fetchErr){setMsg('Mark scheme fetch failed — try uploading manually.');}
+      }
       if(!msPart&&_manualMSFiles.length){
         setMsg('Using manually uploaded mark scheme…');
         const b=await f2b64(_manualMSFiles[0]);
@@ -1911,12 +1939,13 @@ async function runMarking(){
       if(!msPart){
         document.getElementById('ai-loading').style.display='none';
         document.getElementById('ai-results').style.display='block';
-        document.getElementById('ai-summary').textContent='No mark scheme available. Enter a full paper code or upload the mark scheme manually.';
+        document.getElementById('ai-summary').textContent='Could not load mark scheme. Check the paper code is correct or upload the MS manually.';
         document.getElementById('ai-q-list').innerHTML='';
         document.getElementById('ai-save-btn').style.display='none';
         return;
       }
     }
+
 
     const subjDesc=subj.name+' ('+subj.code+')';
     const promptText=buildMarkingPrompt(subjDesc,parsed?parsed.label:codeVal,comment,subj.code,_aiMSMode==='knowledge');
@@ -2286,24 +2315,30 @@ async function runQuickMark(){
     // Build mark scheme part — respect mode toggle
     let msPart=null;
     if(_quickMSMode==='fetch'){
-      if(msInfo){setMsg('Linking mark scheme from PapaCambridge…');msPart=buildMSDocPart(msInfo);}
-      if(!msPart&&_quickManualMSFiles.length){
+      if(msInfo){
+        try{
+          setMsg('Downloading mark scheme from PapaCambridge…');
+          const msB64=await fetchMSasBase64(msInfo.url);
+          msPart={type:'document',source:{type:'base64',media_type:'application/pdf',data:msB64}};
+          setMsg('Mark scheme loaded ✓');
+        }catch(fetchErr){setMsg('Mark scheme fetch failed — try uploading manually.');}
+      }
+      if(!msPart&&_manualMSFiles.length){
         setMsg('Using manually uploaded mark scheme…');
-        const b=await f2b64(_quickManualMSFiles[0]);
-        const mt=_quickManualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
+        const b=await f2b64(_manualMSFiles[0]);
+        const mt=_manualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
         msPart=mt==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}};
       }
       if(!msPart){
         document.getElementById('quick-loading').style.display='none';
         document.getElementById('quick-results').style.display='block';
-        if(detBox)detBox.style.display='flex';
-        document.getElementById('quick-summary').innerHTML=(parsed?'Detected <strong>'+parsed.label+'</strong> but could not fetch the mark scheme. ':'Could not detect paper code or find mark scheme. ')+'Upload the mark scheme manually.';
+        document.getElementById('quick-summary').textContent='Could not load mark scheme. Check the paper code is correct or upload the MS manually.';
         document.getElementById('quick-q-list').innerHTML='';
         document.getElementById('quick-save-btn').style.display='none';
-        document.getElementById('quick-save-row').style.display='none';
         return;
       }
     }
+
 
     // Step 2: full marking call
     const subjDesc=subj?subj.name+' ('+subj.code+')':'a CIE IGCSE subject';
