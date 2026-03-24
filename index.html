@@ -1857,18 +1857,26 @@ const REMOVED_2026={
 function buildMarkingPrompt(subjDesc,parsedLabel,comment,syllabusCode,knowledgeMode){
   const removed=syllabusCode?REMOVED_2026[syllabusCode]||[]:[];
   const removedNote=removed.length>0
-    ?`\n\nSYLLABUS FILTER — 2026 exam: The following topics were removed from the syllabus and will NOT appear in the student's actual exam. If a question is entirely about one of these removed topics, DO NOT include it — skip it completely:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
+    ?`\n\nSYLLABUS FILTER: The following topics are no longer in the 2026 syllabus. If a question is ENTIRELY about one of these, skip it — do not include it as a mistake:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
     :'';
-  const msNote=knowledgeMode
-    ?`\nIMPORTANT: No mark scheme PDF is provided. Use your detailed knowledge of CIE IGCSE ${subjDesc} mark schemes and marking principles to assess the student's answers. You know the mark points, method marks, and accept/reject criteria for CIE papers — apply them rigorously as an experienced CIE examiner would.`
-    :'';
-  return `You are an experienced CIE examiner marking a CIE IGCSE ${subjDesc} past paper${parsedLabel?' — '+parsedLabel:''}.
-${comment?'IMPORTANT student note: '+comment+'\n':''}${msNote}
-Student answers come first${knowledgeMode?'.':', then the official mark scheme.'}
-Identify every question where marks were lost. Return ONLY a JSON array (no markdown):
-[{"qnum":"Q4b","topic":"Algebra","difficulty":"easy|medium|hard","marks_lost":2,"question":"What was asked","correct_solution":"Correct answer per mark scheme with key marking points","student_error":"What the student did wrong","notes":"Key thing to remember next time"}]
-easy=silly/arithmetic mistake, medium=method error or concept gap, hard=didn't know the content at all.
-If no mistakes return: []${removedNote}`;
+  const msSection=knowledgeMode
+    ?`You have no mark scheme PDF. Instead, use your expert knowledge of CIE IGCSE ${subjDesc} past papers to reconstruct what the mark scheme would say. You know exactly which mark points CIE awards, what working is required, what common errors lose marks, and what the accept/reject criteria are. Be as strict as a real CIE examiner — do NOT give benefit of the doubt.`
+    :`The official mark scheme follows the student's answers. Apply it exactly as CIE would.`;
+  return `You are a strict CIE IGCSE examiner marking a ${subjDesc} past paper${parsedLabel?' ('+parsedLabel+')':''}.
+${comment?'NOTE FROM STUDENT: '+comment+'\n':''}
+${msSection}
+
+YOUR TASK: Go through EVERY question the student attempted. For each one, check whether their answer earns full marks. Be strict — partial working, missing units, wrong significant figures, incomplete explanations, and arithmetic errors all lose marks in CIE.
+
+For every question where the student loses ANY marks, add an entry to the JSON array.
+For questions answered perfectly, do NOT include them.
+
+Return ONLY a valid JSON array — no markdown, no explanation, no preamble:
+[{"qnum":"3b","topic":"Quadratic equations","difficulty":"easy|medium|hard","marks_lost":2,"question":"Exact question that was asked","correct_solution":"Complete correct working and answer with all required steps and mark points","student_error":"Precisely what the student did wrong or omitted","notes":"What to remember or revise"}]
+
+difficulty: easy = arithmetic/silly error, medium = method gap or incomplete, hard = did not know the concept.
+If the student genuinely made no errors on any question, return exactly: []
+${removedNote}`;
 }
 
 function buildMSDocPart(msInfo){
