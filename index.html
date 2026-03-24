@@ -473,11 +473,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
       <!-- MS mode toggle -->
       <div style="display:flex;gap:7px;margin-bottom:1.1rem;flex-wrap:wrap">
-        <button id="ai-ms-mode-knowledge" onclick="setAIMSMode('knowledge')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
+        <button id="ai-ms-mode-knowledge" onclick="setAIMode('knowledge')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
           <span style="font-size:12px;font-weight:600;color:inherit">⚡ Claude's knowledge</span>
           <span style="font-size:10px;color:var(--muted);font-weight:400">~5k tokens · faster · cheaper</span>
         </button>
-        <button id="ai-ms-mode-fetch" onclick="setAIMSMode('fetch')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
+        <button id="ai-ms-mode-fetch" onclick="setAIMode('fetch')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
           <span style="font-size:12px;font-weight:600;color:inherit">📋 Fetch mark scheme</span>
           <span style="font-size:10px;color:var(--muted);font-weight:400">~25k tokens · most accurate</span>
         </button>
@@ -571,11 +571,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
       <!-- MS mode toggle -->
       <div style="display:flex;gap:7px;margin-bottom:1rem;flex-wrap:wrap">
-        <button id="quick-ms-mode-knowledge" onclick="setQuickMSMode('knowledge')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
+        <button id="quick-ms-mode-knowledge" onclick="setQuickMode('knowledge')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
           <span style="font-size:12px;font-weight:600;color:inherit">⚡ Claude's knowledge</span>
           <span style="font-size:10px;color:var(--muted);font-weight:400">~5k tokens · faster · cheaper</span>
         </button>
-        <button id="quick-ms-mode-fetch" onclick="setQuickMSMode('fetch')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
+        <button id="quick-ms-mode-fetch" onclick="setQuickMode('fetch')" class="ibtn" style="flex:1;justify-content:center;flex-direction:column;align-items:flex-start;gap:2px;padding:.6rem .9rem;min-width:120px">
           <span style="font-size:12px;font-weight:600;color:inherit">📋 Fetch mark scheme</span>
           <span style="font-size:10px;color:var(--muted);font-weight:400">~25k tokens · most accurate</span>
         </button>
@@ -1694,7 +1694,7 @@ function openAIModal(sid){
   document.getElementById('ai-answers-list').textContent='';
   document.getElementById('ai-ms-manual-list').textContent='';
   document.getElementById('ai-ms-preview').style.display='none';
-  setAIMSMode('knowledge'); // default to knowledge mode
+  setAIMode('knowledge'); // default to knowledge mode
   openModal('ai-modal');
 }
 function handleAnswers(e){_answerFiles=Array.from(e.target.files);document.getElementById('ai-answers-list').textContent=_answerFiles.map(f=>f.name).join(', ');}
@@ -2186,7 +2186,7 @@ function openQuickUpload(){
   document.getElementById('quick-save-row').style.display='flex';
   const icon=document.getElementById('quick-upload-icon');if(icon)icon.textContent='📄';
   const hint=document.getElementById('quick-upload-hint');if(hint)hint.textContent='Tap to choose PDF or photos from Files, Photos, or iCloud';
-  setQuickMSMode('knowledge'); // default to knowledge mode
+  setQuickMode('knowledge'); // default to knowledge mode
   openModal('quick-modal');
 }
 
