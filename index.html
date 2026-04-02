@@ -831,10 +831,10 @@ function buildMSUrl(parsed){
   if(!parsed||!parsed.syllabus||!parsed.paperNum||!parsed.year||!parsed.sessKey)return null;
   const sl=SESS_LETTER[parsed.sessKey];if(!sl)return null;
   const yy=String(parsed.year).slice(2);
-  // PapaCambridge — publicly accessible, no CORS block
-  // format: {code}_{sess}{yy}_ms_{paper}.pdf
+  // DynamicPapers — publicly accessible, Anthropic API can fetch directly
+  // All files live under the same WordPress upload path regardless of year
   const fname=`${parsed.syllabus}_${sl}${yy}_ms_${parsed.paperNum}.pdf`;
-  const url=`https://pastpapers.papacambridge.com/directories/CAIE/CAIE-pastpapers/upload/${fname}`;
+  const url=`https://dynamicpapers.com/wp-content/uploads/2015/09/${fname}`;
   return{url,fname};
 }
 
@@ -1662,7 +1662,7 @@ function extractJSONArray(text){
 
 // MS MODE TOGGLE
 const MS_NOTES_KB='Claude uses its training knowledge of CIE mark schemes. Accurate for 2020-2025 papers, saves ~20k tokens per paper.';
-const MS_NOTES_MS='Claude fetches the official mark scheme PDF from PapaCambridge. Most precise but uses ~25k tokens.';
+const MS_NOTES_MS='Claude fetches the official mark scheme PDF from DynamicPapers. Most precise but uses ~25k tokens.';
 function setAIMode(mode){
   _aiMSMode=mode;
   const kb=document.getElementById('ai-ms-mode-knowledge'),ft=document.getElementById('ai-ms-mode-fetch');
@@ -1860,14 +1860,18 @@ function buildMarkingPrompt(subjDesc,parsedLabel,comment,syllabusCode,knowledgeM
   const msSection=knowledgeMode
     ?`You have no mark scheme. Use your expert knowledge of CIE IGCSE ${subjDesc} to mark this paper.
 
-CRITICAL INSTRUCTIONS:
+CRITICAL INSTRUCTIONS — READ CAREFULLY:
+- BLANK OR EMPTY ANSWERS: If a question has NO answer written, or the answer space is empty/blank, that question is WRONG. The student loses ALL marks for it. You MUST include it in the mistakes list with difficulty "hard" and student_error "No answer given / question left blank".
+- INCOMPLETE ANSWERS: If only part of a multi-part question is answered, the unanswered parts lose all their marks.
 - This student almost certainly made mistakes. Most students lose marks somewhere. Your job is to FIND them.
-- Do NOT assume an answer is correct just because it looks plausible. Check every step.
+- Do NOT assume an answer is correct just because it looks plausible. Check every step of working.
 - Apply CIE's strict marking rules: missing units lose marks, wrong sig figs lose marks, incomplete working loses marks, wrong method loses marks even with a correct final answer (unless follow-through applies).
 - For maths/physics/chemistry: check every calculation, every formula used, every step of working.
 - For biology/chemistry written answers: check for missing key words, incomplete explanations, wrong terminology.
-- Be a tough examiner. If in doubt, mark it wrong.`
-    :`The official mark scheme is provided. Apply it strictly — every mark point must be present to award the mark.`;
+- Be a tough examiner. If in doubt, mark it wrong.
+- Scan the ENTIRE paper. Do not skip any question.`
+    :`The official mark scheme is provided. Apply it strictly — every mark point must be present to award the mark.
+BLANK OR EMPTY ANSWERS: If a question has no answer written, it is wrong — include it with all marks lost.`;
   return `You are a strict CIE IGCSE examiner marking a ${subjDesc} past paper${parsedLabel?' ('+parsedLabel+')':''}.
 ${comment?'STUDENT NOTE: '+comment+'\n':''}
 ${msSection}
