@@ -1665,19 +1665,17 @@ const MS_NOTES_KB='Claude uses its training knowledge of CIE mark schemes. Accur
 const MS_NOTES_MS='Claude fetches the official mark scheme PDF from PapaCambridge. Most precise but uses ~25k tokens.';
 function setAIMode(mode){
   _aiMSMode=mode;
-  const kb=document.getElementById('ai-kb-btn'),ft=document.getElementById('ai-ms-btn');
+  const kb=document.getElementById('ai-ms-mode-knowledge'),ft=document.getElementById('ai-ms-mode-fetch');
   if(kb){kb.style.background=mode==='knowledge'?'var(--ok-bg)':'var(--surface)';kb.style.borderColor=mode==='knowledge'?'var(--ok-border)':'var(--border)';}
   if(ft){ft.style.background=mode==='fetch'?'var(--ok-bg)':'var(--surface)';ft.style.borderColor=mode==='fetch'?'var(--ok-border)':'var(--border)';}
-  const note=document.getElementById('ai-mode-note');if(note)note.textContent=mode==='knowledge'?MS_NOTES_KB:MS_NOTES_MS;
-  const sec=document.getElementById('ai-ms-upload-section');if(sec)sec.style.display=mode==='fetch'?'block':'none';
+  const note=document.getElementById('ai-ms-note');if(note)note.textContent=mode==='knowledge'?MS_NOTES_KB:MS_NOTES_MS;
 }
 function setQuickMode(mode){
   _quickMSMode=mode;
-  const kb=document.getElementById('quick-kb-btn'),ft=document.getElementById('quick-ms-btn');
+  const kb=document.getElementById('quick-ms-mode-knowledge'),ft=document.getElementById('quick-ms-mode-fetch');
   if(kb){kb.style.background=mode==='knowledge'?'var(--ok-bg)':'var(--surface)';kb.style.borderColor=mode==='knowledge'?'var(--ok-border)':'var(--border)';}
   if(ft){ft.style.background=mode==='fetch'?'var(--ok-bg)':'var(--surface)';ft.style.borderColor=mode==='fetch'?'var(--ok-border)':'var(--border)';}
-  const note=document.getElementById('quick-mode-note');if(note)note.textContent=mode==='knowledge'?MS_NOTES_KB:MS_NOTES_MS;
-  const sec=document.getElementById('quick-ms-upload-section');if(sec)sec.style.display=mode==='fetch'?'block':'none';
+  const note=document.getElementById('quick-ms-note');if(note)note.textContent=mode==='knowledge'?MS_NOTES_KB:MS_NOTES_MS;
 }
 
 function openAIModal(sid){
@@ -1883,39 +1881,8 @@ difficulty: easy=arithmetic or silly error, medium=method gap or incomplete answ
 Only return [] if you are CERTAIN every single answer is fully correct by CIE standards.${removedNote}`;
 }
 
-async function fetchMSasBase64(url){
-  // Try direct fetch first, then CORS proxies
-  const attempts=[
-    url,
-    'https://api.allorigins.win/raw?url='+encodeURIComponent(url),
-    'https://corsproxy.io/?'+encodeURIComponent(url),
-  ];
-  let lastErr='';
-  for(const attempt of attempts){
-    try{
-      const resp=await fetch(attempt);
-      if(!resp.ok)throw new Error('HTTP '+resp.status);
-      const buf=await resp.arrayBuffer();
-      if(buf.byteLength<1000)throw new Error('Response too small — probably not a PDF');
-      const bytes=new Uint8Array(buf);
-      let binary='';
-      // Use chunked approach to avoid stack overflow on large PDFs
-      const chunk=8192;
-      for(let i=0;i<bytes.byteLength;i+=chunk){
-        binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));
-      }
-      return btoa(binary);
-    }catch(e){
-      lastErr=e.message;
-    }
-  }
-  throw new Error('Could not fetch mark scheme ('+lastErr+'). Upload it manually instead.');
-}
-
-function buildMSDocPart(msInfo){
-  // This is now only used as a placeholder — actual fetching done via fetchMSasBase64
-  return {type:'document',source:{type:'url',url:msInfo.url}};
-}
+// Mark scheme PDFs are now passed as URL sources directly to the Anthropic API
+// (their servers fetch them server-side, bypassing all CORS restrictions)
 
 async function runMarking(){
   const key=getAKey();if(!key){alert('No API key.');return;}
@@ -1936,12 +1903,9 @@ async function runMarking(){
     let msPart=null;
     if(_aiMSMode==='fetch'){
       if(msInfo){
-        try{
-          setMsg('Fetching mark scheme… (this may take 10–20s)');
-          const msB64=await fetchMSasBase64(msInfo.url);
-          msPart={type:'document',source:{type:'base64',media_type:'application/pdf',data:msB64}};
-          setMsg('Mark scheme loaded ✓');
-        }catch(fetchErr){setMsg('Mark scheme fetch failed — try uploading manually.');}
+        // Pass URL directly to Anthropic API — their servers fetch it, no CORS issues
+        msPart={type:'document',source:{type:'url',url:msInfo.url}};
+        setMsg('Mark scheme linked ✓');
       }
       if(!msPart&&_manualMSFiles.length){
         setMsg('Using manually uploaded mark scheme…');
@@ -2329,17 +2293,14 @@ async function runQuickMark(){
     let msPart=null;
     if(_quickMSMode==='fetch'){
       if(msInfo){
-        try{
-          setMsg('Fetching mark scheme… (this may take 10–20s)');
-          const msB64=await fetchMSasBase64(msInfo.url);
-          msPart={type:'document',source:{type:'base64',media_type:'application/pdf',data:msB64}};
-          setMsg('Mark scheme loaded ✓');
-        }catch(fetchErr){setMsg('Mark scheme fetch failed — try uploading manually.');}
+        // Pass URL directly to Anthropic API — their servers fetch it, no CORS issues
+        msPart={type:'document',source:{type:'url',url:msInfo.url}};
+        setMsg('Mark scheme linked ✓');
       }
-      if(!msPart&&_manualMSFiles.length){
+      if(!msPart&&_quickManualMSFiles.length){
         setMsg('Using manually uploaded mark scheme…');
-        const b=await f2b64(_manualMSFiles[0]);
-        const mt=_manualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
+        const b=await f2b64(_quickManualMSFiles[0]);
+        const mt=_quickManualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
         msPart=mt==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}};
       }
       if(!msPart){
