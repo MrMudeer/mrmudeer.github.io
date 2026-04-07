@@ -1852,37 +1852,49 @@ const REMOVED_2026={
   '0478': [],
 };
 
-function buildMarkingPrompt(subjDesc,parsedLabel,comment,syllabusCode,knowledgeMode){
+function buildSystemPrompt(subjDesc,syllabusCode){
   const removed=syllabusCode?REMOVED_2026[syllabusCode]||[]:[];
   const removedNote=removed.length>0
-    ?`\n\nSYLLABUS FILTER: These topics are no longer in the 2026 syllabus — skip questions that are entirely about them:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
+    ?`\nSYLLABUS FILTER: These topics are no longer in the 2026 syllabus — skip questions entirely about them:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
     :'';
-  const msSection=knowledgeMode
-    ?`You have no mark scheme. Use your expert knowledge of CIE IGCSE ${subjDesc} to mark this paper.
+  return `You are a strict, experienced CIE IGCSE examiner for ${subjDesc}. You mark papers harshly and accurately. You never give the benefit of the doubt. You have been hired specifically because you catch every mistake other examiners miss.${removedNote}`;
+}
 
-CRITICAL INSTRUCTIONS — READ CAREFULLY:
-- BLANK OR EMPTY ANSWERS: If a question has NO answer written, or the answer space is empty/blank, that question is WRONG. The student loses ALL marks for it. You MUST include it in the mistakes list with difficulty "hard" and student_error "No answer given / question left blank".
-- INCOMPLETE ANSWERS: If only part of a multi-part question is answered, the unanswered parts lose all their marks.
-- This student almost certainly made mistakes. Most students lose marks somewhere. Your job is to FIND them.
-- Do NOT assume an answer is correct just because it looks plausible. Check every step of working.
-- Apply CIE's strict marking rules: missing units lose marks, wrong sig figs lose marks, incomplete working loses marks, wrong method loses marks even with a correct final answer (unless follow-through applies).
-- For maths/physics/chemistry: check every calculation, every formula used, every step of working.
-- For biology/chemistry written answers: check for missing key words, incomplete explanations, wrong terminology.
-- Be a tough examiner. If in doubt, mark it wrong.
-- Scan the ENTIRE paper. Do not skip any question.`
-    :`The official mark scheme is provided. Apply it strictly — every mark point must be present to award the mark.
-BLANK OR EMPTY ANSWERS: If a question has no answer written, it is wrong — include it with all marks lost.`;
-  return `You are a strict CIE IGCSE examiner marking a ${subjDesc} past paper${parsedLabel?' ('+parsedLabel+')':''}.
+function buildMarkingInstruction(subjDesc,parsedLabel,comment,knowledgeMode){
+  const blank=`
+BLANK/EMPTY ANSWERS: If ANY question or sub-part has NO answer written, or the space is empty, it is WRONG. Include it with ALL marks lost, difficulty "hard", student_error "Question left blank / no answer given". This is the MOST IMPORTANT rule.`;
+
+  const checking=`
+CHECKING PROCEDURE — follow this exactly:
+1. List every question number you can see in the paper (e.g. 1a, 1b, 2a, 2b, 2c, 3...).
+2. For EACH question, check: is there an answer written? If no → mark as blank (all marks lost).
+3. For EACH answered question, compare the student's answer against the correct answer. Check every line of working.
+4. Any wrong answer, missing step, missing unit, wrong unit, wrong sig figs, incomplete explanation = marks lost.
+5. Report ALL mistakes found.`;
+
+  if(knowledgeMode){
+    return `Now mark this ${subjDesc} paper${parsedLabel?' ('+parsedLabel+')':''} using your expert knowledge.
+${comment?'STUDENT NOTE: '+comment+'\n':''}${blank}${checking}
+
+Return ONLY a JSON array (no markdown, no commentary, no text before or after):
+[{"qnum":"3b","topic":"Quadratic equations","difficulty":"easy|medium|hard","marks_lost":2,"question":"What the question asked","correct_solution":"Full correct answer with key steps","student_error":"What was wrong or missing","notes":"What to revise"}]
+
+difficulty: easy=arithmetic/silly error, medium=method gap, hard=didn't know / left blank.
+A paper with ZERO mistakes is almost impossible. If you return [], you are almost certainly wrong.`;
+  } else {
+    return `Now mark this ${subjDesc} paper${parsedLabel?' ('+parsedLabel+')':''} using the official mark scheme provided above.
 ${comment?'STUDENT NOTE: '+comment+'\n':''}
-${msSection}
+MARKING RULES:
+- Compare EACH student answer against the mark scheme point by point.
+- Every mark point in the scheme must be present to award that mark.
+- If the student's answer does not match the mark scheme answer, it is WRONG — even if it looks reasonable.${blank}${checking}
 
-Go through every question in the paper. For each question where the student loses marks, add an entry. For perfect answers, omit them.
+Return ONLY a JSON array (no markdown, no commentary, no text before or after):
+[{"qnum":"3b","topic":"Quadratic equations","difficulty":"easy|medium|hard","marks_lost":2,"question":"What the question asked","correct_solution":"Correct answer per mark scheme","student_error":"What was wrong or missing","notes":"What to revise"}]
 
-Return ONLY a JSON array, no markdown, no text before or after:
-[{"qnum":"3b","topic":"Quadratic equations","difficulty":"easy|medium|hard","marks_lost":2,"question":"What the question asked","correct_solution":"Full correct working/answer with all required steps and key mark points","student_error":"Exactly what was wrong or missing","notes":"What to revise"}]
-
-difficulty: easy=arithmetic or silly error, medium=method gap or incomplete answer, hard=did not know the concept at all.
-Only return [] if you are CERTAIN every single answer is fully correct by CIE standards.${removedNote}`;
+difficulty: easy=arithmetic/silly error, medium=method gap, hard=didn't know / left blank.
+A paper with ZERO mistakes is almost impossible. If you return [], you are almost certainly wrong.`;
+  }
 }
 
 // Mark scheme PDFs are now passed as URL sources directly to the Anthropic API
@@ -1929,12 +1941,18 @@ async function runMarking(){
 
 
     const subjDesc=subj.name+' ('+subj.code+')';
-    const promptText=buildMarkingPrompt(subjDesc,parsed?parsed.label:codeVal,comment,subj.code,_aiMSMode==='knowledge');
-    const parts=[{type:'text',text:promptText},...answerParts];
-    if(msPart){parts.push({type:'text',text:'--- OFFICIAL MARK SCHEME ---'});parts.push(msPart);}
+    const sysPrompt=buildSystemPrompt(subjDesc,subj.code);
+    const instruction=buildMarkingInstruction(subjDesc,parsed?parsed.label:codeVal,comment,_aiMSMode==='knowledge');
+
+    // Structure: documents first, then strict instructions LAST (closest to response generation)
+    const parts=[];
+    parts.push({type:'text',text:'STUDENT ANSWER PAPER:'});
+    parts.push(...answerParts);
+    if(msPart){parts.push({type:'text',text:'OFFICIAL MARK SCHEME:'});parts.push(msPart);}
+    parts.push({type:'text',text:instruction});
 
     setMsg('Claude is marking your paper…');
-    const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,messages:[{role:'user',content:parts}]},setMsg);
+    const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:parts}]},setMsg);
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
     _aiParsed=extractJSONArray(raw);
     if(!Array.isArray(_aiParsed)||!_aiParsed.length){
@@ -2320,11 +2338,18 @@ async function runQuickMark(){
 
     // Step 2: full marking call
     const subjDesc=subj?subj.name+' ('+subj.code+')':'a CIE IGCSE subject';
-    const promptText=buildMarkingPrompt(subjDesc,parsed?parsed.label:detectedCode,comment,subj?subj.code:null,_quickMSMode==='knowledge');
-    const parts=[{type:'text',text:promptText},...fileParts];
-    if(msPart){parts.push({type:'text',text:'--- OFFICIAL MARK SCHEME ---'});parts.push(msPart);}
+    const sysPrompt=buildSystemPrompt(subjDesc,subj?subj.code:null);
+    const instruction=buildMarkingInstruction(subjDesc,parsed?parsed.label:detectedCode,comment,_quickMSMode==='knowledge');
+
+    // Structure: documents first, then strict instructions LAST
+    const parts=[];
+    parts.push({type:'text',text:'STUDENT ANSWER PAPER:'});
+    parts.push(...fileParts);
+    if(msPart){parts.push({type:'text',text:'OFFICIAL MARK SCHEME:'});parts.push(msPart);}
+    parts.push({type:'text',text:instruction});
+
     setMsg('Claude is marking your paper…');
-    const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,messages:[{role:'user',content:parts}]},setMsg);
+    const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:parts}]},setMsg);
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
     _quickParsed=extractJSONArray(raw);
     _quickDetected={code:detectedCode,parsed,subj,msInfo};
@@ -2334,10 +2359,10 @@ async function runQuickMark(){
     if(detBox)detBox.style.display='flex';
 
     if(!Array.isArray(_quickParsed)||!_quickParsed.length){
-      document.getElementById('quick-summary').textContent='No mistakes found — perfect paper!';
+      document.getElementById('quick-summary').textContent='Claude found no mistakes. If this seems wrong, try "Fetch mark scheme" mode for more accuracy.';
       document.getElementById('quick-q-list').innerHTML='';
       document.getElementById('quick-save-row').style.display='none';
-      saveQuickMark();return;
+      return;
     }
     document.getElementById('quick-summary').textContent='Claude found '+_quickParsed.length+' mistake'+(_quickParsed.length!==1?'s':'')+'. Review then save.';
     document.getElementById('quick-save-btn').style.display='inline-flex';
