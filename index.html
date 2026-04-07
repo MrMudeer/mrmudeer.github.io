@@ -1612,13 +1612,52 @@ function extractJSONArray(text){
   // Find the first [ and last ] to extract just the array
   const start=s.indexOf('[');
   const end=s.lastIndexOf(']');
-  if(start===-1||end===-1||end<start)return[];
-  try{
-    return JSON.parse(s.slice(start,end+1));
-  }catch(e){
-    // Last resort: try the whole cleaned string
-    try{return JSON.parse(s);}catch(e2){return[];}
+  if(start===-1)return[];
+
+  // Try normal parse first
+  if(end>start){
+    try{return JSON.parse(s.slice(start,end+1));}catch(e){}
   }
+
+  // If that failed, the response was probably truncated (max_tokens hit).
+  // Try to salvage by finding the last complete JSON object in the array.
+  const arrayContent=s.slice(start);
+  // Find all complete {...} objects
+  const objects=[];
+  let depth=0,objStart=-1;
+  for(let i=1;i<arrayContent.length;i++){
+    const c=arrayContent[i];
+    if(c==='{'&&depth===0){objStart=i;depth=1;}
+    else if(c==='{')depth++;
+    else if(c==='}'){
+      depth--;
+      if(depth===0&&objStart>=0){
+        objects.push(arrayContent.slice(objStart,i+1));
+        objStart=-1;
+      }
+    }
+    // Handle string escaping to avoid false matches
+    if(c==='"'){
+      i++;
+      while(i<arrayContent.length&&arrayContent[i]!=='"'){
+        if(arrayContent[i]==='\\')i++; // skip escaped char
+        i++;
+      }
+    }
+  }
+  if(objects.length>0){
+    try{
+      return JSON.parse('['+objects.join(',')+']');
+    }catch(e2){
+      // Try objects one by one, keep the ones that parse
+      const valid=[];
+      for(const obj of objects){
+        try{valid.push(JSON.parse(obj));}catch(e3){}
+      }
+      if(valid.length>0)return valid;
+    }
+  }
+  return[];
 }
 
 
@@ -1857,7 +1896,9 @@ function buildSystemPrompt(subjDesc,syllabusCode){
   const removedNote=removed.length>0
     ?`\nSYLLABUS FILTER: These topics are no longer in the 2026 syllabus — skip questions entirely about them:\n${removed.map((t,i)=>`${i+1}. ${t}`).join('\n')}`
     :'';
-  return `You are a strict, experienced CIE IGCSE examiner for ${subjDesc}. You mark papers harshly and accurately. You never give the benefit of the doubt. You have been hired specifically because you catch every mistake other examiners miss.${removedNote}`;
+  return `You are a strict, experienced CIE IGCSE examiner for ${subjDesc}. You mark papers harshly and accurately. You never give the benefit of the doubt. You have been hired specifically because you catch every mistake other examiners miss.
+
+RESPONSE FORMAT: You MUST respond with ONLY a raw JSON array. No preamble, no "I'll...", no markdown fences, no commentary. Start your response with [ and end with ].${removedNote}`;
 }
 
 function buildMarkingInstruction(subjDesc,parsedLabel,comment,knowledgeMode){
@@ -1880,7 +1921,8 @@ Return ONLY a JSON array (no markdown, no commentary, no text before or after):
 [{"qnum":"3b","topic":"Quadratic equations","difficulty":"easy|medium|hard","marks_lost":2,"question":"What the question asked","correct_solution":"Full correct answer with key steps","student_error":"What was wrong or missing","notes":"What to revise"}]
 
 difficulty: easy=arithmetic/silly error, medium=method gap, hard=didn't know / left blank.
-A paper with ZERO mistakes is almost impossible. If you return [], you are almost certainly wrong.`;
+A paper with ZERO mistakes is almost impossible. If you return [], you are almost certainly wrong.
+IMPORTANT: Keep each field concise (1-2 sentences max). Do NOT write long paragraphs in student_error or correct_solution.`;
   } else {
     return `Now mark this ${subjDesc} paper${parsedLabel?' ('+parsedLabel+')':''} using the official mark scheme provided above.
 ${comment?'STUDENT NOTE: '+comment+'\n':''}
@@ -1893,7 +1935,8 @@ Return ONLY a JSON array (no markdown, no commentary, no text before or after):
 [{"qnum":"3b","topic":"Quadratic equations","difficulty":"easy|medium|hard","marks_lost":2,"question":"What the question asked","correct_solution":"Correct answer per mark scheme","student_error":"What was wrong or missing","notes":"What to revise"}]
 
 difficulty: easy=arithmetic/silly error, medium=method gap, hard=didn't know / left blank.
-A paper with ZERO mistakes is almost impossible. If you return [], you are almost certainly wrong.`;
+A paper with ZERO mistakes is almost impossible. If you return [], you are almost certainly wrong.
+IMPORTANT: Keep each field concise (1-2 sentences max). Do NOT write long paragraphs in student_error or correct_solution.`;
   }
 }
 
@@ -1970,7 +2013,7 @@ async function runMarking(){
     log.push('TOTAL PARTS IN MESSAGE: '+parts.length+' — types: '+parts.map(p=>p.type).join(', '));
 
     setMsg('Claude is marking your paper…');
-    const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:parts}]},setMsg);
+    const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:16384,system:sysPrompt,messages:[{role:'user',content:parts}]},setMsg);
 
     log.push('API RESPONSE — stop_reason: '+(data.stop_reason||'unknown'));
     log.push('API RESPONSE — usage: '+JSON.stringify(data.usage||{}));
@@ -1980,19 +2023,23 @@ async function runMarking(){
     log.push('RAW RESPONSE TEXT (full): '+raw);
 
     _aiParsed=extractJSONArray(raw);
-    log.push('PARSED MISTAKES: '+_aiParsed.length+' items');
+    const wasTruncated=data.stop_reason==='max_tokens';
+    log.push('TRUNCATED: '+(wasTruncated?'YES — response cut off before finishing':'no'));
+    log.push('PARSED MISTAKES: '+_aiParsed.length+' items'+(wasTruncated?' (salvaged from truncated response)':''));
     if(_aiParsed.length>0) log.push('FIRST MISTAKE: '+JSON.stringify(_aiParsed[0]));
 
     if(!Array.isArray(_aiParsed)||!_aiParsed.length){
       document.getElementById('ai-loading').style.display='none';
       document.getElementById('ai-results').style.display='block';
-      document.getElementById('ai-summary').textContent='Claude found no mistakes. If this seems wrong, check the debug log below.';
+      document.getElementById('ai-summary').textContent=wasTruncated
+        ?'Response was truncated and no complete mistakes could be recovered. Check debug log.'
+        :'Claude found no mistakes. If this seems wrong, check the debug log below.';
       document.getElementById('ai-q-list').innerHTML=renderDebugLog(log);
       document.getElementById('ai-save-btn').style.display='none';
       return;
     }
     _lastDebugLog=log;
-    renderMarkingResults(codeVal);
+    renderMarkingResults(codeVal,wasTruncated);
   }catch(e){
     log.push('ERROR: '+e.message);
     log.push('STACK: '+(e.stack||'(none)'));
@@ -2012,10 +2059,11 @@ function renderDebugLog(log){
   </details>`;
 }
 
-function renderMarkingResults(code){
+function renderMarkingResults(code,wasTruncated){
   document.getElementById('ai-loading').style.display='none';
   document.getElementById('ai-results').style.display='block';
-  document.getElementById('ai-summary').textContent=`Claude found ${_aiParsed.length} mistake${_aiParsed.length!==1?'s':''}. Review then save.`;
+  const truncNote=wasTruncated?' (response was truncated — some mistakes at the end may be missing)':'';
+  document.getElementById('ai-summary').textContent=`Claude found ${_aiParsed.length} mistake${_aiParsed.length!==1?'s':''}${truncNote}. Review then save.`;
   document.getElementById('ai-save-btn').style.display='inline-flex';
   document.getElementById('ai-q-list').innerHTML=_aiParsed.map((q,i)=>`
     <div style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:.85rem 1rem">
@@ -2401,7 +2449,7 @@ async function runQuickMark(){
     log.push('TOTAL PARTS: '+parts.length+' — types: '+parts.map(p=>p.type).join(', '));
 
     setMsg('Claude is marking your paper…');
-    const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:parts}]},setMsg);
+    const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:16384,system:sysPrompt,messages:[{role:'user',content:parts}]},setMsg);
 
     log.push('API stop_reason: '+(data.stop_reason||'unknown'));
     log.push('API usage: '+JSON.stringify(data.usage||{}));
@@ -2411,7 +2459,9 @@ async function runQuickMark(){
     log.push('RAW RESPONSE (full): '+raw);
 
     _quickParsed=extractJSONArray(raw);
-    log.push('PARSED MISTAKES: '+_quickParsed.length);
+    const wasTruncated=data.stop_reason==='max_tokens';
+    log.push('TRUNCATED: '+(wasTruncated?'YES':'no'));
+    log.push('PARSED MISTAKES: '+_quickParsed.length+(wasTruncated?' (salvaged from truncated response)':''));
     _quickDetected={code:detectedCode,parsed,subj,msInfo};
 
     document.getElementById('quick-loading').style.display='none';
@@ -2419,12 +2469,15 @@ async function runQuickMark(){
     if(detBox)detBox.style.display='flex';
 
     if(!Array.isArray(_quickParsed)||!_quickParsed.length){
-      document.getElementById('quick-summary').textContent='Claude found no mistakes. Check debug log below.';
+      document.getElementById('quick-summary').textContent=wasTruncated
+        ?'Response was truncated and no complete mistakes could be recovered. Check debug log.'
+        :'Claude found no mistakes. Check debug log below.';
       document.getElementById('quick-q-list').innerHTML=renderDebugLog(log);
       document.getElementById('quick-save-row').style.display='none';
       return;
     }
-    document.getElementById('quick-summary').textContent='Claude found '+_quickParsed.length+' mistake'+(_quickParsed.length!==1?'s':'')+'. Review then save.';
+    const truncNote=wasTruncated?' (truncated — some may be missing)':'';
+    document.getElementById('quick-summary').textContent='Claude found '+_quickParsed.length+' mistake'+(_quickParsed.length!==1?'s':'')+truncNote+'. Review then save.';
     document.getElementById('quick-save-btn').style.display='inline-flex';
     document.getElementById('quick-q-list').innerHTML=_quickParsed.map((q,i)=>'<div style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:.8rem 1rem"><div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;flex-wrap:wrap"><span style="font-family:\'DM Mono\',monospace;font-size:11px;font-weight:500">'+(q.qnum||'Q'+(i+1))+'</span>'+(q.topic?'<span class="tag tag-topic">'+q.topic+'</span>':'')+(q.difficulty?'<span class="tag '+(DIFF_CLS[q.difficulty]||'tag-topic')+'">'+(DIFF_LBL[q.difficulty]||q.difficulty)+'</span>':'')+(q.marks_lost?'<span class="tag tag-marks">-'+q.marks_lost+'m</span>':'')+'</div><div class="qlbl">Question</div><div class="qtxt" style="margin-bottom:7px">'+(q.question||'')+'</div><div class="qlbl">Correct solution</div><div class="qsol">'+(q.correct_solution||'')+'</div>'+(q.student_error?'<div class="qnotes">Your error: '+q.student_error+'</div>':'')+'</div>').join('')+renderDebugLog(log);
   }catch(e){
