@@ -1912,66 +1912,106 @@ async function runMarking(){
   document.getElementById('ai-loading').style.display='block';
   document.getElementById('ai-results').style.display='none';
   const setMsg=m=>{const e=document.getElementById('ai-loading-txt');if(e)e.textContent=m;};
+
+  // Diagnostic log
+  const log=[];
+  log.push('MODE: '+(_aiMSMode||'unknown'));
+  log.push('PAPER CODE: '+(codeVal||'(none)'));
+  log.push('PARSED: '+(parsed?JSON.stringify(parsed):'null'));
+  log.push('MS URL: '+(msInfo?msInfo.url:'(none)'));
+  log.push('ANSWER FILES: '+_answerFiles.map(f=>f.name+' ('+f.type+', '+(f.size/1024).toFixed(1)+'KB)').join(', '));
+  log.push('MANUAL MS FILES: '+(_manualMSFiles.length?_manualMSFiles.map(f=>f.name).join(', '):'(none)'));
+
   try{
     const answerParts=await buildAnswerParts(_answerFiles,setMsg);
+    log.push('ANSWER PARTS BUILT: '+answerParts.length+' parts — types: '+answerParts.map(p=>p.type).join(', '));
 
     // Get mark scheme — respect MS mode toggle
     let msPart=null;
     if(_aiMSMode==='fetch'){
       if(msInfo){
-        // Pass URL directly to Anthropic API — their servers fetch it, no CORS issues
         msPart={type:'document',source:{type:'url',url:msInfo.url}};
         setMsg('Mark scheme linked ✓');
+        log.push('MS SOURCE: URL → '+msInfo.url);
       }
       if(!msPart&&_manualMSFiles.length){
         setMsg('Using manually uploaded mark scheme…');
         const b=await f2b64(_manualMSFiles[0]);
         const mt=_manualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
         msPart=mt==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}};
+        log.push('MS SOURCE: manual upload ('+mt+', '+(b.length/1024).toFixed(1)+'KB b64)');
       }
       if(!msPart){
+        log.push('MS SOURCE: FAILED — no URL and no manual upload');
         document.getElementById('ai-loading').style.display='none';
         document.getElementById('ai-results').style.display='block';
         document.getElementById('ai-summary').textContent='Could not load mark scheme. Check the paper code is correct or upload the MS manually.';
-        document.getElementById('ai-q-list').innerHTML='';
+        document.getElementById('ai-q-list').innerHTML=renderDebugLog(log);
         document.getElementById('ai-save-btn').style.display='none';
         return;
       }
+    } else {
+      log.push('MS SOURCE: knowledge mode (no MS fetched)');
     }
-
 
     const subjDesc=subj.name+' ('+subj.code+')';
     const sysPrompt=buildSystemPrompt(subjDesc,subj.code);
     const instruction=buildMarkingInstruction(subjDesc,parsed?parsed.label:codeVal,comment,_aiMSMode==='knowledge');
 
-    // Structure: documents first, then strict instructions LAST (closest to response generation)
+    log.push('SYSTEM PROMPT (first 200 chars): '+sysPrompt.slice(0,200));
+    log.push('INSTRUCTION (first 300 chars): '+instruction.slice(0,300));
+
     const parts=[];
     parts.push({type:'text',text:'STUDENT ANSWER PAPER:'});
     parts.push(...answerParts);
     if(msPart){parts.push({type:'text',text:'OFFICIAL MARK SCHEME:'});parts.push(msPart);}
     parts.push({type:'text',text:instruction});
 
+    log.push('TOTAL PARTS IN MESSAGE: '+parts.length+' — types: '+parts.map(p=>p.type).join(', '));
+
     setMsg('Claude is marking your paper…');
     const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:parts}]},setMsg);
+
+    log.push('API RESPONSE — stop_reason: '+(data.stop_reason||'unknown'));
+    log.push('API RESPONSE — usage: '+JSON.stringify(data.usage||{}));
+    log.push('API RESPONSE — content blocks: '+data.content.length+' — types: '+data.content.map(c=>c.type).join(', '));
+
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
+    log.push('RAW RESPONSE TEXT (full): '+raw);
+
     _aiParsed=extractJSONArray(raw);
+    log.push('PARSED MISTAKES: '+_aiParsed.length+' items');
+    if(_aiParsed.length>0) log.push('FIRST MISTAKE: '+JSON.stringify(_aiParsed[0]));
+
     if(!Array.isArray(_aiParsed)||!_aiParsed.length){
       document.getElementById('ai-loading').style.display='none';
       document.getElementById('ai-results').style.display='block';
-      document.getElementById('ai-summary').textContent='No mistakes found — perfect paper!';
-      document.getElementById('ai-q-list').innerHTML='';
+      document.getElementById('ai-summary').textContent='Claude found no mistakes. If this seems wrong, check the debug log below.';
+      document.getElementById('ai-q-list').innerHTML=renderDebugLog(log);
       document.getElementById('ai-save-btn').style.display='none';
       return;
     }
+    _lastDebugLog=log;
     renderMarkingResults(codeVal);
   }catch(e){
+    log.push('ERROR: '+e.message);
+    log.push('STACK: '+(e.stack||'(none)'));
     document.getElementById('ai-loading').style.display='none';
     document.getElementById('ai-results').style.display='block';
     document.getElementById('ai-summary').textContent='Error: '+e.message;
-    document.getElementById('ai-q-list').innerHTML='';
+    document.getElementById('ai-q-list').innerHTML=renderDebugLog(log);
     document.getElementById('ai-save-btn').style.display='none';
   }
 }
+let _lastDebugLog=[];
+
+function renderDebugLog(log){
+  return `<details style="margin-top:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);overflow:hidden">
+    <summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);user-select:none">🔍 Debug log (${log.length} entries)</summary>
+    <pre style="padding:10px 12px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto;margin:0;border-top:1px solid var(--border)">${log.map((l,i)=>`[${i+1}] ${l}`).join('\n\n')}</pre>
+  </details>`;
+}
+
 function renderMarkingResults(code){
   document.getElementById('ai-loading').style.display='none';
   document.getElementById('ai-results').style.display='block';
@@ -1989,7 +2029,7 @@ function renderMarkingResults(code){
       <div class="qlbl">Correct solution</div>
       <div class="qsol">${q.correct_solution||''}</div>
       ${q.student_error?`<div class="qnotes">Your error: ${q.student_error}</div>`:''}
-    </div>`).join('');
+    </div>`).join('')+(_lastDebugLog.length?renderDebugLog(_lastDebugLog):'');
 }
 function saveMarking(){
   if(!_aiParsed.length)return;
@@ -2274,11 +2314,15 @@ async function runQuickMark(){
   document.getElementById('quick-loading').style.display='block';
   document.getElementById('quick-results').style.display='none';
   const setMsg=m=>{const e=document.getElementById('quick-loading-txt');if(e)e.textContent=m;};
-  try{
-    // Compress + encode answer files
-    const fileParts=await buildAnswerParts(_quickAnswerFiles,setMsg);
 
-    // Step 1: detect paper code — use Haiku (fast, cheap, no rate limit impact)
+  const log=[];
+  log.push('MODE: '+(_quickMSMode||'unknown'));
+  log.push('ANSWER FILES: '+_quickAnswerFiles.map(f=>f.name+' ('+f.type+', '+(f.size/1024).toFixed(1)+'KB)').join(', '));
+
+  try{
+    const fileParts=await buildAnswerParts(_quickAnswerFiles,setMsg);
+    log.push('ANSWER PARTS BUILT: '+fileParts.length+' — types: '+fileParts.map(p=>p.type).join(', '));
+
     setMsg('Detecting paper code…');
     const detectData=await claudeAPI(key,{
       model:'claude-haiku-4-5-20251001',max_tokens:30,
@@ -2289,19 +2333,21 @@ async function runQuickMark(){
     },setMsg);
     const detectedCode=(()=>{
       const txt=(detectData.content.find(c=>c.type==='text')?.text||'').trim();
-      // Try to extract a CIE code pattern from anywhere in the response
+      log.push('DETECT RAW RESPONSE: "'+txt+'"');
       const m=txt.match(/\d{4}\s*[\/\-]\s*\d{1,2}\s*[\/\-]\s*[A-Z]\s*[\/\-]\s*[A-Z]\s*[\/\-]\s*\d{2,4}/i);
       if(m)return m[0].replace(/\s/g,'').toUpperCase();
       if(txt.toUpperCase()==='UNKNOWN'||!txt)return null;
-      // If the whole response is short and looks like a code, use it
       if(txt.length<20&&!txt.includes(' '))return txt.toUpperCase();
       return null;
     })();
+    log.push('DETECTED CODE: '+(detectedCode||'(none)'));
+
     const parsed=(detectedCode&&detectedCode!=='UNKNOWN')?parseCIE(detectedCode):null;
     let subj=null;
     if(parsed){subj=SUBJECTS.find(s=>s.code===parsed.syllabus);_quickSid=subj?subj.id:null;}
+    log.push('PARSED: '+(parsed?JSON.stringify(parsed):'null'));
+    log.push('SUBJECT: '+(subj?subj.name+' ('+subj.code+')':'(not matched)'));
 
-    // Show detection result
     const detBox=document.getElementById('quick-detected-info');
     const detTxt=document.getElementById('quick-detected-txt');
     if(detBox&&detTxt){
@@ -2310,48 +2356,62 @@ async function runQuickMark(){
     }
 
     const msInfo=parsed?buildMSUrl(parsed):null;
+    log.push('MS URL: '+(msInfo?msInfo.url:'(none)'));
 
-    // Build mark scheme part — respect mode toggle
     let msPart=null;
     if(_quickMSMode==='fetch'){
       if(msInfo){
-        // Pass URL directly to Anthropic API — their servers fetch it, no CORS issues
         msPart={type:'document',source:{type:'url',url:msInfo.url}};
         setMsg('Mark scheme linked ✓');
+        log.push('MS SOURCE: URL → '+msInfo.url);
       }
       if(!msPart&&_quickManualMSFiles.length){
         setMsg('Using manually uploaded mark scheme…');
         const b=await f2b64(_quickManualMSFiles[0]);
         const mt=_quickManualMSFiles[0].type==='application/pdf'?'application/pdf':'image/jpeg';
         msPart=mt==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}};
+        log.push('MS SOURCE: manual upload');
       }
       if(!msPart){
+        log.push('MS SOURCE: FAILED');
         document.getElementById('quick-loading').style.display='none';
         document.getElementById('quick-results').style.display='block';
-        document.getElementById('quick-summary').textContent='Could not load mark scheme. Check the paper code is correct or upload the MS manually.';
-        document.getElementById('quick-q-list').innerHTML='';
+        document.getElementById('quick-summary').textContent='Could not load mark scheme.';
+        document.getElementById('quick-q-list').innerHTML=renderDebugLog(log);
         document.getElementById('quick-save-btn').style.display='none';
         return;
       }
+    } else {
+      log.push('MS SOURCE: knowledge mode');
     }
 
-
-    // Step 2: full marking call
     const subjDesc=subj?subj.name+' ('+subj.code+')':'a CIE IGCSE subject';
     const sysPrompt=buildSystemPrompt(subjDesc,subj?subj.code:null);
     const instruction=buildMarkingInstruction(subjDesc,parsed?parsed.label:detectedCode,comment,_quickMSMode==='knowledge');
 
-    // Structure: documents first, then strict instructions LAST
+    log.push('SYSTEM PROMPT (first 200): '+sysPrompt.slice(0,200));
+    log.push('INSTRUCTION (first 300): '+instruction.slice(0,300));
+
     const parts=[];
     parts.push({type:'text',text:'STUDENT ANSWER PAPER:'});
     parts.push(...fileParts);
     if(msPart){parts.push({type:'text',text:'OFFICIAL MARK SCHEME:'});parts.push(msPart);}
     parts.push({type:'text',text:instruction});
 
+    log.push('TOTAL PARTS: '+parts.length+' — types: '+parts.map(p=>p.type).join(', '));
+
     setMsg('Claude is marking your paper…');
     const data=await claudeAPI(key,{model:'claude-sonnet-4-6',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:parts}]},setMsg);
+
+    log.push('API stop_reason: '+(data.stop_reason||'unknown'));
+    log.push('API usage: '+JSON.stringify(data.usage||{}));
+    log.push('API content blocks: '+data.content.length);
+
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
+    log.push('RAW RESPONSE (full): '+raw);
+
     _quickParsed=extractJSONArray(raw);
+    log.push('PARSED MISTAKES: '+_quickParsed.length);
     _quickDetected={code:detectedCode,parsed,subj,msInfo};
 
     document.getElementById('quick-loading').style.display='none';
@@ -2359,19 +2419,21 @@ async function runQuickMark(){
     if(detBox)detBox.style.display='flex';
 
     if(!Array.isArray(_quickParsed)||!_quickParsed.length){
-      document.getElementById('quick-summary').textContent='Claude found no mistakes. If this seems wrong, try "Fetch mark scheme" mode for more accuracy.';
-      document.getElementById('quick-q-list').innerHTML='';
+      document.getElementById('quick-summary').textContent='Claude found no mistakes. Check debug log below.';
+      document.getElementById('quick-q-list').innerHTML=renderDebugLog(log);
       document.getElementById('quick-save-row').style.display='none';
       return;
     }
     document.getElementById('quick-summary').textContent='Claude found '+_quickParsed.length+' mistake'+(_quickParsed.length!==1?'s':'')+'. Review then save.';
     document.getElementById('quick-save-btn').style.display='inline-flex';
-    document.getElementById('quick-q-list').innerHTML=_quickParsed.map((q,i)=>'<div style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:.8rem 1rem"><div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;flex-wrap:wrap"><span style="font-family:\'DM Mono\',monospace;font-size:11px;font-weight:500">'+(q.qnum||'Q'+(i+1))+'</span>'+(q.topic?'<span class="tag tag-topic">'+q.topic+'</span>':'')+(q.difficulty?'<span class="tag '+(DIFF_CLS[q.difficulty]||'tag-topic')+'">'+(DIFF_LBL[q.difficulty]||q.difficulty)+'</span>':'')+(q.marks_lost?'<span class="tag tag-marks">-'+q.marks_lost+'m</span>':'')+'</div><div class="qlbl">Question</div><div class="qtxt" style="margin-bottom:7px">'+(q.question||'')+'</div><div class="qlbl">Correct solution</div><div class="qsol">'+(q.correct_solution||'')+'</div>'+(q.student_error?'<div class="qnotes">Your error: '+q.student_error+'</div>':'')+'</div>').join('');
+    document.getElementById('quick-q-list').innerHTML=_quickParsed.map((q,i)=>'<div style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:.8rem 1rem"><div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;flex-wrap:wrap"><span style="font-family:\'DM Mono\',monospace;font-size:11px;font-weight:500">'+(q.qnum||'Q'+(i+1))+'</span>'+(q.topic?'<span class="tag tag-topic">'+q.topic+'</span>':'')+(q.difficulty?'<span class="tag '+(DIFF_CLS[q.difficulty]||'tag-topic')+'">'+(DIFF_LBL[q.difficulty]||q.difficulty)+'</span>':'')+(q.marks_lost?'<span class="tag tag-marks">-'+q.marks_lost+'m</span>':'')+'</div><div class="qlbl">Question</div><div class="qtxt" style="margin-bottom:7px">'+(q.question||'')+'</div><div class="qlbl">Correct solution</div><div class="qsol">'+(q.correct_solution||'')+'</div>'+(q.student_error?'<div class="qnotes">Your error: '+q.student_error+'</div>':'')+'</div>').join('')+renderDebugLog(log);
   }catch(e){
+    log.push('ERROR: '+e.message);
+    log.push('STACK: '+(e.stack||''));
     document.getElementById('quick-loading').style.display='none';
     document.getElementById('quick-results').style.display='block';
     document.getElementById('quick-summary').textContent='Error: '+e.message;
-    document.getElementById('quick-q-list').innerHTML='';
+    document.getElementById('quick-q-list').innerHTML=renderDebugLog(log);
     document.getElementById('quick-save-btn').style.display='none';
   }
 }
