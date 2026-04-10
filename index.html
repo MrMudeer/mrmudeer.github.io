@@ -1631,6 +1631,22 @@ let _curSid=null,_aiParsed=[],_bulkParsed=[],_answerFiles=[],_manualMSFiles=[],_
 function openModal(id){document.getElementById(id).style.display='block';document.body.style.overflow='hidden';}
 function closeModal(id){document.getElementById(id).style.display='none';document.body.style.overflow='';}
 
+// Filter out entries that are self-contradicting (Claude says "actually correct" while deducting marks)
+function isRealMistake(q){
+  if(!q||!(q.marks_lost>0))return false;
+  const err=(q.student_error||'').toLowerCase();
+  const contradictions=[
+    'actually correct','this is correct','is correct','appears correct',
+    'is acceptable','this is acceptable','student is right','answer is right',
+    'fully correct','both correct','both answers','correct answer',
+    'no error','no mistake','valid answer','is accepted'
+  ];
+  for(const phrase of contradictions){
+    if(err.includes(phrase))return false;
+  }
+  return true;
+}
+
 // Robustly extract a JSON array from Claude's response regardless of surrounding text
 function extractJSONArray(text){
   if(!text)return[];
@@ -1977,7 +1993,8 @@ IMPORTANT: Be concise in all fields.
 - "student_error": Just say what was wrong in 1 sentence. Do NOT restate the full correct answer here.
 - "correct_solution": Brief correct answer — key points only, not a full essay.
 - "notes": One short revision tip.
-CRITICAL: ONLY include questions where marks were LOST (marks_lost >= 1). If the student got it right, SKIP IT — do not add it to the array.`;
+CRITICAL: ONLY include questions where marks were LOST (marks_lost >= 1). If the student got it right, SKIP IT — do not add it to the array.
+SELF-CHECK before adding any entry: Re-read the student's answer and the mark scheme. If the student's answer is actually valid/correct/acceptable, DO NOT add it. Never write phrases like "this is actually correct", "both answers appear correct", "this is acceptable", or "the student is right" in student_error — if any of these apply, the entry should not exist at all.`;
   } else {
     return `Now mark this ${subjDesc} paper${parsedLabel?' ('+parsedLabel+')':''} using the official mark scheme provided above.
 ${comment?'STUDENT NOTE: '+comment+'\n':''}
@@ -1997,7 +2014,8 @@ IMPORTANT: Be concise in all fields.
 - "student_error": Just say what was wrong in 1 sentence. Do NOT restate the full correct answer here.
 - "correct_solution": Brief correct answer — key points only, not a full essay.
 - "notes": One short revision tip.
-CRITICAL: ONLY include questions where marks were LOST (marks_lost >= 1). If the student got it right, SKIP IT — do not add it to the array.`;
+CRITICAL: ONLY include questions where marks were LOST (marks_lost >= 1). If the student got it right, SKIP IT — do not add it to the array.
+SELF-CHECK before adding any entry: Re-read the student's answer and the mark scheme. If the student's answer matches the mark scheme or any of its accepted alternatives, DO NOT add it. Never write phrases like "this is actually correct", "both answers appear correct", "this is acceptable", or "the student is right" in student_error — if any of these apply, the entry should not exist at all.`;
   }
 }
 
@@ -2085,7 +2103,7 @@ async function runMarking(){
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
     log.push('RAW RESPONSE TEXT (full): '+raw);
 
-    _aiParsed=extractJSONArray(raw).filter(q=>q.marks_lost>0);
+    _aiParsed=extractJSONArray(raw).filter(isRealMistake);
     const wasTruncated=data.stop_reason==='max_tokens';
     log.push('TRUNCATED: '+(wasTruncated?'YES — response cut off before finishing':'no'));
     log.push('PARSED MISTAKES: '+_aiParsed.length+' items'+(wasTruncated?' (salvaged from truncated response)':''));
@@ -2541,7 +2559,7 @@ async function runQuickMark(){
     const raw=data.content.find(c=>c.type==='text')?.text||'[]';
     log.push('RAW RESPONSE (full): '+raw);
 
-    _quickParsed=extractJSONArray(raw).filter(q=>q.marks_lost>0);
+    _quickParsed=extractJSONArray(raw).filter(isRealMistake);
     const wasTruncated=data.stop_reason==='max_tokens';
     log.push('TRUNCATED: '+(wasTruncated?'YES':'no'));
     log.push('PARSED MISTAKES: '+_quickParsed.length+(wasTruncated?' (salvaged from truncated response)':''));
