@@ -1799,13 +1799,21 @@ async function f2b64(file,maxPx=1600){
 
 // Anthropic API call with automatic rate-limit retry
 async function claudeAPI(key,body,setMsg,attempt=1){
-  const resp=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify(body)
-  });
+  const bodyStr=JSON.stringify(body);
+  const sizeMB=(bodyStr.length/1024/1024).toFixed(2);
+  if(window._lastRequestSize!==undefined)window._lastRequestSize=sizeMB;
+  let resp;
+  try{
+    resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:bodyStr
+    });
+  }catch(netErr){
+    // Network-level failure (Safari "Load failed", connection drop, CORS, etc.)
+    throw new Error(`Network error: ${netErr.message}. Request was ${sizeMB}MB. If large, try splitting your answer files or using fewer pages.`);
+  }
   if(resp.status===429){
-    // Rate limited — wait and retry (up to 3 attempts)
     if(attempt>=3)throw new Error('Rate limit exceeded after 3 attempts. Try again in a minute.');
     const waitSecs=attempt===1?30:60;
     for(let i=waitSecs;i>0;i--){
@@ -1814,7 +1822,11 @@ async function claudeAPI(key,body,setMsg,attempt=1){
     }
     return claudeAPI(key,body,setMsg,attempt+1);
   }
-  if(!resp.ok){const err=await resp.json();throw new Error(err.error?.message||'API error '+resp.status);}
+  if(!resp.ok){
+    let errMsg='API error '+resp.status;
+    try{const err=await resp.json();errMsg=err.error?.message||errMsg;}catch(e){}
+    throw new Error(`${errMsg} (status ${resp.status}, request size ${sizeMB}MB)`);
+  }
   return resp.json();
 }
 
@@ -2426,22 +2438,39 @@ async function runQuickMark(){
     log.push('ANSWER PARTS BUILT: '+fileParts.length+' — types: '+fileParts.map(p=>p.type).join(', '));
 
     setMsg('Detecting paper code…');
-    const detectData=await claudeAPI(key,{
-      model:'claude-haiku-4-5-20251001',max_tokens:30,
-      messages:[{role:'user',content:[
-        {type:'text',text:'Look at this CIE IGCSE exam paper. Find the paper code (format: NNNN/NN/X/X/NN e.g. 0580/21/M/J/25). Return ONLY the code, nothing else. If not found return UNKNOWN.'},
-        ...fileParts
-      ]}]
-    },setMsg);
-    const detectedCode=(()=>{
+
+    // Try filename-based detection first (skips an API call entirely)
+    let detectedCode=null;
+    for(const f of _quickAnswerFiles){
+      // Match filenames like 0580_s24_qp_42.pdf or 0580_w22_qp_43.pdf
+      const fnMatch=f.name.match(/(\d{4})_([smw])(\d{2})_(?:qp|ms)_(\d{2})/i);
+      if(fnMatch){
+        const[,syll,sess,yy,pn]=fnMatch;
+        const sessKey={s:'M/J',w:'O/N',m:'F/M'}[sess.toLowerCase()];
+        if(sessKey){
+          detectedCode=`${syll}/${pn}/${sessKey}/${yy}`;
+          log.push('FILENAME DETECTION: '+detectedCode+' (from '+f.name+')');
+          break;
+        }
+      }
+    }
+
+    // Fall back to API detection if filename didn't match
+    if(!detectedCode){
+      log.push('FILENAME DETECTION: no match — calling Haiku');
+      const detectData=await claudeAPI(key,{
+        model:'claude-haiku-4-5-20251001',max_tokens:30,
+        messages:[{role:'user',content:[
+          {type:'text',text:'Look at this CIE IGCSE exam paper. Find the paper code (format: NNNN/NN/X/X/NN e.g. 0580/21/M/J/25). Return ONLY the code, nothing else. If not found return UNKNOWN.'},
+          ...fileParts
+        ]}]
+      },setMsg);
       const txt=(detectData.content.find(c=>c.type==='text')?.text||'').trim();
       log.push('DETECT RAW RESPONSE: "'+txt+'"');
       const m=txt.match(/\d{4}\s*[\/\-]\s*\d{1,2}\s*[\/\-]\s*[A-Z]\s*[\/\-]\s*[A-Z]\s*[\/\-]\s*\d{2,4}/i);
-      if(m)return m[0].replace(/\s/g,'').toUpperCase();
-      if(txt.toUpperCase()==='UNKNOWN'||!txt)return null;
-      if(txt.length<20&&!txt.includes(' '))return txt.toUpperCase();
-      return null;
-    })();
+      if(m)detectedCode=m[0].replace(/\s/g,'').toUpperCase();
+      else if(txt.toUpperCase()!=='UNKNOWN'&&txt&&txt.length<20&&!txt.includes(' '))detectedCode=txt.toUpperCase();
+    }
     log.push('DETECTED CODE: '+(detectedCode||'(none)'));
 
     const parsed=(detectedCode&&detectedCode!=='UNKNOWN')?parseCIE(detectedCode):null;
