@@ -521,10 +521,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           <textarea id="ai-comment" rows="2" placeholder="e.g. Ignore questions with a protractor — I'm on iPad."></textarea>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <input type="checkbox" id="ai-red-wrong" style="width:15px;height:15px;accent-color:var(--text);cursor:pointer"/>
-        <label for="ai-red-wrong" style="font-size:13px;color:var(--text);cursor:pointer">Answers in <span style="color:#c0392b;font-weight:600">red</span> were added with help — mark them wrong</label>
-      </div>
+
       <details style="margin-top:10px">
         <summary style="font-size:12px;color:var(--muted);cursor:pointer">Can't auto-fetch mark scheme? Upload manually</summary>
         <div class="ff" style="margin-top:9px">
@@ -613,12 +610,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
             <span id="quick-detect-txt" style="color:var(--ok-text)"></span>
           </div>
         </div>
-      </div>
-
-      <!-- Red answers toggle -->
-      <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
-        <input type="checkbox" id="quick-red-wrong" style="width:15px;height:15px;accent-color:var(--text);cursor:pointer"/>
-        <label for="quick-red-wrong" style="font-size:13px;color:var(--text);cursor:pointer">Answers written in <span style="color:#c0392b;font-weight:600">red</span> were added with help — mark them wrong</label>
       </div>
 
       <!-- Comment -->
@@ -1828,7 +1819,6 @@ function openAIModal(sid){
   document.getElementById('ai-loading').style.display='block';
   document.getElementById('ai-code').value='';
   document.getElementById('ai-comment').value='';
-  const aiRedCb=document.getElementById('ai-red-wrong');if(aiRedCb)aiRedCb.checked=false;
   document.getElementById('ai-answers-list').textContent='';
   document.getElementById('ai-ms-manual-list').textContent='';
   document.getElementById('ai-ms-preview').style.display='none';
@@ -1891,6 +1881,15 @@ async function claudeAPI(key,body,setMsg,attempt=1){
     const waitSecs=attempt===1?30:60;
     for(let i=waitSecs;i>0;i--){
       setMsg(`Rate limit hit — retrying in ${i}s…`);
+      await new Promise(r=>setTimeout(r,1000));
+    }
+    return claudeAPI(key,body,setMsg,attempt+1);
+  }
+  if(resp.status>=500&&resp.status<600){
+    if(attempt>=3)throw new Error(`Anthropic server error (${resp.status}) after 3 attempts. Try again in a few minutes.`);
+    const waitSecs=attempt===1?5:15;
+    for(let i=waitSecs;i>0;i--){
+      setMsg(`Server error ${resp.status} — retrying in ${i}s (attempt ${attempt+1}/3)…`);
       await new Promise(r=>setTimeout(r,1000));
     }
     return claudeAPI(key,body,setMsg,attempt+1);
@@ -2023,20 +2022,25 @@ The object MUST have this exact shape:
 {"total_marks": <number, total marks available on the paper>, "marks_lost": <number, total marks lost across all mistakes>, "mistakes": [ array of mistake objects ]}${removedNote}`;
 }
 
-function buildMarkingInstruction(subjDesc,parsedLabel,comment,knowledgeMode,redWrong){
+function buildMarkingInstruction(subjDesc,parsedLabel,comment,knowledgeMode){
   const blank=`
 BLANK/EMPTY ANSWERS: If ANY question or sub-part has NO answer written, or the space is empty, it is WRONG. Include it with ALL marks lost, difficulty "hard", student_error "Question left blank". This is the MOST IMPORTANT rule.`;
 
-  const redRule=redWrong?`
+  const redRule=`
 
-🔴 RED ANSWER RULE — CRITICAL — APPLIES TO EVERY QUESTION:
-The student has marked some answers in RED INK/PEN. These answers were added with outside help and MUST be marked WRONG, regardless of whether the content is technically correct.
-- For ANY answer you see written in red: include it as a mistake.
-- Set student_error to: "Answered with help (red ink)"
-- Set difficulty to: "hard"
-- Set marks_lost to the FULL marks for that question (treat as if blank).
-- Provide the correct_solution as normal so the student can learn from it.
-- Do NOT skip red answers just because they look correct. The student needs to learn these themselves.`:'';
+🔴 RED INK RULE — APPLIES TO EVERY ANSWER:
+Inspect the INK COLOUR of each answer carefully before marking.
+- BLACK or BLUE ink = student's own answer. Mark normally against the mark scheme.
+- RED ink = student needed help. ALWAYS mark these WRONG with FULL marks lost, regardless of whether the content is correct.
+
+For every answer in RED ink:
+- marks_lost = full marks of that question (treat as blank)
+- difficulty = "hard"
+- student_error = "Answered with help (red ink)"
+- correct_solution = the proper full mark answer
+
+For every answer in BLACK/BLUE ink: mark on its own merits as usual.
+NEVER mark a black/blue answer wrong as if it were red. NEVER skip a red answer as if it were correct. Check the colour of EACH answer individually.`;
 
   const checking=`
 CHECKING PROCEDURE:
@@ -2102,7 +2106,6 @@ async function runMarking(){
   if(!_answerFiles.length){alert('Upload your answers first.');return;}
   const codeVal=document.getElementById('ai-code').value||'';
   const comment=document.getElementById('ai-comment').value||'';
-  const redWrong=document.getElementById('ai-red-wrong')&&document.getElementById('ai-red-wrong').checked;
   const parsed=parseCIE(codeVal);const msInfo=parsed?buildMSUrl(parsed):null;
   const subj=SUBJECTS.find(s=>s.id===_curSid);
   document.getElementById('ai-step1').style.display='none';
@@ -2154,7 +2157,7 @@ async function runMarking(){
 
     const subjDesc=subj.name+' ('+subj.code+')';
     const sysPrompt=buildSystemPrompt(subjDesc,subj.code);
-    const instruction=buildMarkingInstruction(subjDesc,parsed?parsed.label:codeVal,comment,_aiMSMode==='knowledge',redWrong);
+    const instruction=buildMarkingInstruction(subjDesc,parsed?parsed.label:codeVal,comment,_aiMSMode==='knowledge');
 
     log.push('SYSTEM PROMPT (first 200 chars): '+sysPrompt.slice(0,200));
     log.push('INSTRUCTION (first 300 chars): '+instruction.slice(0,300));
@@ -2502,7 +2505,6 @@ function openQuickUpload(){
   document.getElementById('quick-results').style.display='none';
   document.getElementById('quick-loading').style.display='block';
   document.getElementById('quick-comment').value='';
-  const quickRedCb=document.getElementById('quick-red-wrong');if(quickRedCb)quickRedCb.checked=false;
   document.getElementById('quick-answers-list').textContent='';
   document.getElementById('quick-ms-manual-list').textContent='';
   document.getElementById('quick-detect-status').style.display='none';
@@ -2557,7 +2559,6 @@ async function runQuickMark(){
   if(!_quickAnswerFiles.length){alert('Please upload or paste your answers first.');return;}
   const key=getAKey();if(!key){alert('No API key set.');return;}
   const comment=(document.getElementById('quick-comment')||{}).value||'';
-  const redWrong=document.getElementById('quick-red-wrong')&&document.getElementById('quick-red-wrong').checked;
   document.getElementById('quick-step1').style.display='none';
   document.getElementById('quick-step2').style.display='block';
   document.getElementById('quick-loading').style.display='block';
@@ -2653,7 +2654,7 @@ async function runQuickMark(){
 
     const subjDesc=subj?subj.name+' ('+subj.code+')':'a CIE IGCSE subject';
     const sysPrompt=buildSystemPrompt(subjDesc,subj?subj.code:null);
-    const instruction=buildMarkingInstruction(subjDesc,parsed?parsed.label:detectedCode,comment,_quickMSMode==='knowledge',redWrong);
+    const instruction=buildMarkingInstruction(subjDesc,parsed?parsed.label:detectedCode,comment,_quickMSMode==='knowledge');
 
     log.push('SYSTEM PROMPT (first 200): '+sysPrompt.slice(0,200));
     log.push('INSTRUCTION (first 300): '+instruction.slice(0,300));
